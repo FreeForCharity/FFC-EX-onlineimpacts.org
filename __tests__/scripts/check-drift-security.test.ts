@@ -307,6 +307,22 @@ describe('security drift guard', () => {
     expect(result.output).toContain('.linkinatorrc.json is missing')
   })
 
+  // readForCspCheck() returns null for ENOENT but an empty string for a
+  // present-but-empty file — those are different facts, and only the first
+  // one is "missing". An `if (!body)` check would conflate them and hide the
+  // more accurate "not valid JSON" diagnosis behind a "go restore the file
+  // you already have" one.
+  it('reports "not valid JSON", not "is missing", when .linkinatorrc.json is present but empty', () => {
+    const dir = makeFixture({ linkinatorRc: '' })
+    fixtures.push(dir)
+
+    const result = runDrift(dir)
+
+    expect(result.status).not.toBe(0)
+    expect(result.output).toContain('.linkinatorrc.json is not valid JSON')
+    expect(result.output).not.toContain('.linkinatorrc.json is missing')
+  })
+
   // Same distinction as the _headers tests above: a file that exists but
   // cannot be read is not the same fact as it being absent, and must not be
   // misreported as "missing" (which would send the reader to restore a file

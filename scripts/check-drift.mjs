@@ -619,7 +619,7 @@ async function checkLinkinatorSkipsOwnOrigin(siteConfig) {
   const configPath = join(ROOT, '.linkinatorrc.json')
   const body = await readForCspCheck(configPath)
   if (body === UNREADABLE) return // readForCspCheck already reported the read error.
-  if (!body) {
+  if (body === null) {
     errors.push('.linkinatorrc.json is missing. Add a skip list that excludes siteConfig.url.')
     return
   }
