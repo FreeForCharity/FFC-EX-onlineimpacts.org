@@ -573,12 +573,18 @@ async function checkSecurityTxtSync(siteConfig) {
   }
 
   if (!cname) {
+    const payloadsByFile = [
+      ['public/.well-known/security.txt', wellKnownPayload],
+      ['public/security.txt', rootPayload],
+    ]
     for (const line of rootLines) {
-      if (!wellKnownPayload.includes(line)) continue
-      errors.push(
-        `public/.well-known/security.txt has a root-origin line that misdirects to the shared ` +
-          `${origin} homepage (no public/CNAME is configured yet): ${line}`
-      )
+      for (const [file, payload] of payloadsByFile) {
+        if (!payload.includes(line)) continue
+        errors.push(
+          `${file} has a root-origin line that misdirects to the shared ` +
+            `${origin} homepage (no public/CNAME is configured yet): ${line}`
+        )
+      }
     }
   }
 }
