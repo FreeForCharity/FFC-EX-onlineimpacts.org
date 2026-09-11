@@ -562,7 +562,14 @@ async function checkSecurityTxtSync(siteConfig) {
   // lines that are now correct — requiring both shapes at once (the
   // pre-fix bug here) would force security.txt to advertise a project-path
   // URL the custom-domain deploy never serves.
-  const cname = (await readIfExists(join(PUBLIC_DIR, 'CNAME')))?.trim() || null
+  // Mirror deploy.yml's `[ -s "public/CNAME" ]` check exactly: that tests
+  // non-empty file SIZE, not trimmed content. A whitespace-only file (e.g. a
+  // stray "\n") is non-empty, so deploy.yml treats it as configured and
+  // serves the custom domain's root — `.trim() || null` would collapse that
+  // same file to "no CNAME" here and disagree with deploy.yml about which
+  // URL shape is correct.
+  const cnameRaw = await readIfExists(join(PUBLIC_DIR, 'CNAME'))
+  const cname = Boolean(cnameRaw && cnameRaw.length > 0)
   const rootLines = [
     `Canonical: ${origin}/.well-known/security.txt`,
     `Canonical: ${origin}/security.txt`,

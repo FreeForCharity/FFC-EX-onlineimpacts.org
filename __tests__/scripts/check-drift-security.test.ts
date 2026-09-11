@@ -258,6 +258,25 @@ describe('security drift guard', () => {
     )
   })
 
+  it("treats a whitespace-only public/CNAME as configured, matching deploy.yml's `[ -s ... ]` check", () => {
+    // deploy.yml decides the basePath with `[ -s "public/CNAME" ]`, which
+    // tests non-empty file SIZE, not trimmed content — a stray "\n" is
+    // non-empty, so deploy.yml serves the custom domain's root. This guard
+    // must reach the same verdict rather than trimming the content down to
+    // an empty string and treating that as "no CNAME".
+    const dir = makeFixture({ cname: '\n' })
+    fixtures.push(dir)
+
+    const result = runDrift(dir)
+
+    expect(result.status).not.toBe(0)
+    expect(result.output).toContain(
+      'Missing: Canonical: https://ffcworkingsite1.org/.well-known/security.txt'
+    )
+    expect(result.output).toContain('misdirects to')
+    expect(result.output).toContain('GitHub Pages subpath')
+  })
+
   it('passes with only root lines once public/CNAME exists', () => {
     const rootOnly = [
       'Contact: mailto:clarkemoyer@freeforcharity.org',
