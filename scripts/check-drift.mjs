@@ -538,17 +538,31 @@ async function checkSecurityTxtSync(siteConfig) {
 
   if (!siteConfig?.url) return
   const origin = siteConfig.url.replace(/\/$/, '')
+  const projectLines = [
+    `Canonical: ${origin}${GITHUB_PAGES_PROJECT_PATH}/.well-known/security.txt`,
+    `Canonical: ${origin}${GITHUB_PAGES_PROJECT_PATH}/security.txt`,
+    `Policy: ${origin}${GITHUB_PAGES_PROJECT_PATH}${siteConfig.vulnerabilityDisclosurePath}`,
+    `Acknowledgments: ${origin}${GITHUB_PAGES_PROJECT_PATH}/security-acknowledgements`,
+  ]
+  // Root (no-project-path) lines are only meaningful once a real custom
+  // domain is configured (public/CNAME): siteConfig.url is otherwise the
+  // *shared* freeforcharity.github.io origin, which serves FFC's own org
+  // homepage at its root — publishing bare-origin Canonical/Policy/
+  // Acknowledgments lines there would misdirect a security reporter to a
+  // different site entirely, not this one (flagged in FFC-EX-onlineimpacts.org#16).
+  const cname = (await readIfExists(join(PUBLIC_DIR, 'CNAME')))?.trim() || null
+  const rootLines = [
+    `Canonical: ${origin}/.well-known/security.txt`,
+    `Canonical: ${origin}/security.txt`,
+    `Policy: ${origin}${siteConfig.vulnerabilityDisclosurePath}`,
+    `Acknowledgments: ${origin}/security-acknowledgements`,
+  ]
+
   const expectedLines = [
     siteConfig.contactEmail ? `Contact: mailto:${siteConfig.contactEmail}` : null,
     'Preferred-Languages: en',
-    `Canonical: ${origin}/.well-known/security.txt`,
-    `Canonical: ${origin}/security.txt`,
-    `Canonical: ${origin}${GITHUB_PAGES_PROJECT_PATH}/.well-known/security.txt`,
-    `Canonical: ${origin}${GITHUB_PAGES_PROJECT_PATH}/security.txt`,
-    `Policy: ${origin}${siteConfig.vulnerabilityDisclosurePath}`,
-    `Policy: ${origin}${GITHUB_PAGES_PROJECT_PATH}${siteConfig.vulnerabilityDisclosurePath}`,
-    `Acknowledgments: ${origin}/security-acknowledgements`,
-    `Acknowledgments: ${origin}${GITHUB_PAGES_PROJECT_PATH}/security-acknowledgements`,
+    ...projectLines,
+    ...(cname ? rootLines : []),
   ].filter(Boolean)
 
   for (const line of expectedLines) {
@@ -556,6 +570,16 @@ async function checkSecurityTxtSync(siteConfig) {
     errors.push(
       `public/.well-known/security.txt is not aligned with src/lib/site.config.ts. Missing: ${line}`
     )
+  }
+
+  if (!cname) {
+    for (const line of rootLines) {
+      if (!wellKnownPayload.includes(line)) continue
+      errors.push(
+        `public/.well-known/security.txt has a root-origin line that misdirects to the shared ` +
+          `${origin} homepage (no public/CNAME is configured yet): ${line}`
+      )
+    }
   }
 }
 

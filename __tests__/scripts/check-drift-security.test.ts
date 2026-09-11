@@ -6,18 +6,19 @@ import { tmpdir } from 'node:os'
 const syncedCsp =
   "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://www.googletagmanager.com; frame-src https://www.googletagmanager.com; media-src 'self' blob: https:; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
 
+// No public/CNAME is created in these fixtures (see makeFixture below), so
+// the root (no-project-path) Canonical/Policy/Acknowledgments lines are
+// deliberately absent — matching scripts/check-drift.mjs's
+// checkSecurityTxtSync, which only expects/allows them once a real custom
+// domain exists (see FFC-EX-onlineimpacts.org#16).
 function payload(expires = '2027-12-31T00:00:00.000Z'): string {
   return [
     'Contact: mailto:clarkemoyer@freeforcharity.org',
     `Expires: ${expires}`,
     'Preferred-Languages: en',
-    'Canonical: https://ffcworkingsite1.org/.well-known/security.txt',
-    'Canonical: https://ffcworkingsite1.org/security.txt',
     'Canonical: https://ffcworkingsite1.org/FFC-EX-onlineimpacts.org/.well-known/security.txt',
     'Canonical: https://ffcworkingsite1.org/FFC-EX-onlineimpacts.org/security.txt',
-    'Policy: https://ffcworkingsite1.org/vulnerability-disclosure-policy',
     'Policy: https://ffcworkingsite1.org/FFC-EX-onlineimpacts.org/vulnerability-disclosure-policy',
-    'Acknowledgments: https://ffcworkingsite1.org/security-acknowledgements',
     'Acknowledgments: https://ffcworkingsite1.org/FFC-EX-onlineimpacts.org/security-acknowledgements',
     '',
   ].join('\n')
@@ -194,6 +195,34 @@ describe('security drift guard', () => {
 
     expect(result.status).not.toBe(0)
     expect(result.output).toContain('public/security.txt and public/.well-known/security.txt')
+  })
+
+  it('fails when a root (no-project-path) security.txt line is present without a public/CNAME', () => {
+    // The misdirection this guards against: no CNAME exists, so
+    // siteConfig.url is the *shared* freeforcharity.github.io origin —
+    // a bare-origin Canonical line here would point a reporter at FFC's
+    // org homepage, not this site (see FFC-EX-onlineimpacts.org#16).
+    const misdirected = [
+      'Contact: mailto:clarkemoyer@freeforcharity.org',
+      'Expires: 2027-12-31T00:00:00.000Z',
+      'Preferred-Languages: en',
+      'Canonical: https://ffcworkingsite1.org/.well-known/security.txt',
+      'Canonical: https://ffcworkingsite1.org/FFC-EX-onlineimpacts.org/.well-known/security.txt',
+      'Canonical: https://ffcworkingsite1.org/FFC-EX-onlineimpacts.org/security.txt',
+      'Policy: https://ffcworkingsite1.org/FFC-EX-onlineimpacts.org/vulnerability-disclosure-policy',
+      'Acknowledgments: https://ffcworkingsite1.org/FFC-EX-onlineimpacts.org/security-acknowledgements',
+      '',
+    ].join('\n')
+    const dir = makeFixture({ wellKnown: misdirected, rootSecurity: misdirected })
+    fixtures.push(dir)
+
+    const result = runDrift(dir)
+
+    expect(result.status).not.toBe(0)
+    expect(result.output).toContain('misdirects to the shared')
+    expect(result.output).toContain(
+      'Canonical: https://ffcworkingsite1.org/.well-known/security.txt'
+    )
   })
 
   it('fails when siteConfig.url is not a bare https origin', () => {

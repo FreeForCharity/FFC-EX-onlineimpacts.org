@@ -5,18 +5,18 @@
 # Expires must be a future RFC 3339 datetime. The included GitHub Action opens
 # an issue when the date gets close.
 #
-# Project-site Canonical lines include the GitHub Pages base path used when the
-# template is served without a custom domain. Root Canonical lines cover custom
-# domains. The drift checker enforces matching payloads.
+# Project-site Canonical lines include the GitHub Pages base path this site is
+# actually served under (no custom domain / public/CNAME yet). Root
+# (no-base-path) lines are deliberately omitted until a custom domain exists —
+# this repo currently shares the freeforcharity.github.io origin with every
+# other FFC site, so a bare-origin line would point a reporter at FFC's org
+# homepage, not this site. The drift checker enforces this and matching
+# payloads between the two copies.
 
 Contact: mailto:clarkemoyer@freeforcharity.org
 Expires: 2027-12-31T00:00:00.000Z
 Preferred-Languages: en
-Canonical: https://freeforcharity.github.io/.well-known/security.txt
-Canonical: https://freeforcharity.github.io/security.txt
 Canonical: https://freeforcharity.github.io/FFC-EX-onlineimpacts.org/.well-known/security.txt
 Canonical: https://freeforcharity.github.io/FFC-EX-onlineimpacts.org/security.txt
-Policy: https://freeforcharity.github.io/vulnerability-disclosure-policy
 Policy: https://freeforcharity.github.io/FFC-EX-onlineimpacts.org/vulnerability-disclosure-policy
-Acknowledgments: https://freeforcharity.github.io/security-acknowledgements
 Acknowledgments: https://freeforcharity.github.io/FFC-EX-onlineimpacts.org/security-acknowledgements
