@@ -46,15 +46,15 @@ const footerPolicyLinks = [
   // The charity's own donation policy. Matched with exact names below so this
   // does not also match "Free For Charity Donation Policy".
   { name: 'Donation Policy', pathSuffix: '/donation-policy' },
-  { name: 'Free For Charity Privacy Policy', pathSuffix: '/privacy-policy' },
-  { name: 'Free For Charity Cookie Policy', pathSuffix: '/cookie-policy' },
-  { name: 'Free For Charity Terms of Service', pathSuffix: '/terms-of-service' },
+  { name: 'Online Impacts Privacy Policy', pathSuffix: '/privacy-policy' },
+  { name: 'Online Impacts Cookie Policy', pathSuffix: '/cookie-policy' },
+  { name: 'Online Impacts Terms of Service', pathSuffix: '/terms-of-service' },
   {
-    name: 'Free For Charity Vulnerability Disclosure Policy',
+    name: 'Online Impacts Vulnerability Disclosure Policy',
     pathSuffix: '/vulnerability-disclosure-policy',
   },
   {
-    name: 'Free For Charity Security Acknowledgement',
+    name: 'Online Impacts Security Acknowledgement',
     pathSuffix: '/security-acknowledgements',
   },
 ]
@@ -79,13 +79,14 @@ test.describe('Post-deploy smoke tests', () => {
     const footer = page.locator('footer')
     await expect(footer).toBeVisible()
 
-    // Three column headings
-    await expect(footer.getByRole('heading', { name: 'Endorsements' })).toBeVisible()
+    // Two column headings — Endorsements is Level 2 only (validated EIN +
+    // Candid/GuideStar profile); Online Impacts is defunct, not an active
+    // 501(c)(3), so that column does not render here.
     await expect(footer.getByRole('heading', { name: 'Quick Links' })).toBeVisible()
     await expect(footer.getByRole('heading', { name: 'Contact Us' })).toBeVisible()
 
     // Policy section heading
-    await expect(footer.getByRole('heading', { name: 'Free For Charity Policy' })).toBeVisible()
+    await expect(footer.getByRole('heading', { name: 'Online Impacts Policy' })).toBeVisible()
   })
 
   test('footer contains policy links with correct paths', async ({ page }) => {
