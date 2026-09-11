@@ -29,7 +29,7 @@ const warnings = []
 const KEBAB_CASE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const APP_RESERVED = new Set(['api', '_components', '_lib'])
 const PLACEHOLDER_HOST = 'ffcworkingsite1.org'
-const GITHUB_PAGES_PROJECT_PATH = '/FFC-IN-Footer_Only_Template'
+const GITHUB_PAGES_PROJECT_PATH = '/FFC-EX-onlineimpacts.org'
 const SECURITY_TXT_RFC3339 =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})$/
 

@@ -13,12 +13,12 @@ function payload(expires = '2027-12-31T00:00:00.000Z'): string {
     'Preferred-Languages: en',
     'Canonical: https://ffcworkingsite1.org/.well-known/security.txt',
     'Canonical: https://ffcworkingsite1.org/security.txt',
-    'Canonical: https://ffcworkingsite1.org/FFC-IN-Footer_Only_Template/.well-known/security.txt',
-    'Canonical: https://ffcworkingsite1.org/FFC-IN-Footer_Only_Template/security.txt',
+    'Canonical: https://ffcworkingsite1.org/FFC-EX-onlineimpacts.org/.well-known/security.txt',
+    'Canonical: https://ffcworkingsite1.org/FFC-EX-onlineimpacts.org/security.txt',
     'Policy: https://ffcworkingsite1.org/vulnerability-disclosure-policy',
-    'Policy: https://ffcworkingsite1.org/FFC-IN-Footer_Only_Template/vulnerability-disclosure-policy',
+    'Policy: https://ffcworkingsite1.org/FFC-EX-onlineimpacts.org/vulnerability-disclosure-policy',
     'Acknowledgments: https://ffcworkingsite1.org/security-acknowledgements',
-    'Acknowledgments: https://ffcworkingsite1.org/FFC-IN-Footer_Only_Template/security-acknowledgements',
+    'Acknowledgments: https://ffcworkingsite1.org/FFC-EX-onlineimpacts.org/security-acknowledgements',
     '',
   ].join('\n')
 }

@@ -54,22 +54,22 @@ describe('deployable security artifacts', () => {
     expect(wellKnownPayload).toContain(`Canonical: ${siteConfig.url}/.well-known/security.txt`)
     expect(wellKnownPayload).toContain(`Canonical: ${siteConfig.url}/security.txt`)
     expect(wellKnownPayload).toContain(
-      `Canonical: ${siteConfig.url}/FFC-IN-Footer_Only_Template/.well-known/security.txt`
+      `Canonical: ${siteConfig.url}/FFC-EX-onlineimpacts.org/.well-known/security.txt`
     )
     expect(wellKnownPayload).toContain(
-      `Canonical: ${siteConfig.url}/FFC-IN-Footer_Only_Template/security.txt`
+      `Canonical: ${siteConfig.url}/FFC-EX-onlineimpacts.org/security.txt`
     )
     expect(wellKnownPayload).toContain(
       `Policy: ${siteConfig.url}${siteConfig.vulnerabilityDisclosurePath}`
     )
     expect(wellKnownPayload).toContain(
-      `Policy: ${siteConfig.url}/FFC-IN-Footer_Only_Template${siteConfig.vulnerabilityDisclosurePath}`
+      `Policy: ${siteConfig.url}/FFC-EX-onlineimpacts.org${siteConfig.vulnerabilityDisclosurePath}`
     )
     expect(wellKnownPayload).toContain(
       `Acknowledgments: ${siteConfig.url}/security-acknowledgements`
     )
     expect(wellKnownPayload).toContain(
-      `Acknowledgments: ${siteConfig.url}/FFC-IN-Footer_Only_Template/security-acknowledgements`
+      `Acknowledgments: ${siteConfig.url}/FFC-EX-onlineimpacts.org/security-acknowledgements`
     )
 
     const expires = wellKnownPayload.match(/^Expires:\s*(.+)$/m)?.[1]
