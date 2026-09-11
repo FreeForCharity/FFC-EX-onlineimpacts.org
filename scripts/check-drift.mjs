@@ -588,13 +588,12 @@ async function checkSecurityTxtSync(siteConfig) {
   } catch (err) {
     if (err.code !== 'ENOENT') {
       errors.push(
-        `Could not stat public/CNAME (${err.code || err.message}). ` +
-          'The file is present but its size could not be determined — fix the stat error ' +
-          'rather than assuming the file is absent.'
+        `Could not stat public/CNAME (${err.code || err.message}) — fix the stat error rather ` +
+          'than assuming the file is absent.'
       )
     }
   }
-  const cname = cnameSize > 0
+  const hasCname = cnameSize > 0
   await readForCspCheck(join(PUBLIC_DIR, 'CNAME'))
   const rootLines = [
     `Canonical: ${origin}/.well-known/security.txt`,
@@ -602,9 +601,9 @@ async function checkSecurityTxtSync(siteConfig) {
     `Policy: ${origin}${siteConfig.vulnerabilityDisclosurePath}`,
     `Acknowledgments: ${origin}/security-acknowledgements`,
   ]
-  const correctLines = cname ? rootLines : projectLines
-  const misdirectingLines = cname ? projectLines : rootLines
-  const misdirectingLabel = cname
+  const correctLines = hasCname ? rootLines : projectLines
+  const misdirectingLines = hasCname ? projectLines : rootLines
+  const misdirectingLabel = hasCname
     ? `the GitHub Pages subpath ${GITHUB_PAGES_PROJECT_PATH} (public/CNAME is configured, so the ` +
       `build now serves this site at ${origin}'s root, not that subpath)`
     : `the shared ${origin} origin (no public/CNAME is configured yet)`
