@@ -27,7 +27,7 @@ function payload(expires = '2027-12-31T00:00:00.000Z'): string {
 function makeFixture(
   overrides: Partial<
     Record<
-      'headers' | 'layout' | 'siteConfig' | 'wellKnown' | 'rootSecurity' | 'linkinatorRc',
+      'headers' | 'layout' | 'siteConfig' | 'wellKnown' | 'rootSecurity' | 'linkinatorRc' | 'cname',
       string | null
     >
   > = {}
@@ -61,6 +61,7 @@ function makeFixture(
     wellKnown: payload(),
     rootSecurity: payload(),
     linkinatorRc: JSON.stringify({ skip: ['^https://ffcworkingsite1\\.org/.*'] }),
+    cname: null, // absent by default — most fixtures are the no-custom-domain state
     ...overrides,
   }
 
@@ -72,6 +73,7 @@ function makeFixture(
     writeFileSync(join(dir, 'public/.well-known/security.txt'), files.wellKnown)
   if (files.rootSecurity !== null)
     writeFileSync(join(dir, 'public/security.txt'), files.rootSecurity)
+  if (files.cname !== null) writeFileSync(join(dir, 'public/CNAME'), files.cname)
   if (files.linkinatorRc !== null)
     writeFileSync(join(dir, '.linkinatorrc.json'), files.linkinatorRc)
 
@@ -229,6 +231,54 @@ describe('security drift guard', () => {
     expect(result.output).toContain(
       'Canonical: https://ffcworkingsite1.org/.well-known/security.txt'
     )
+  })
+
+  it('requires root lines (not project-path lines) once public/CNAME exists', () => {
+    // Mirror image of the no-CNAME case above: once a custom domain is
+    // configured, deploy.yml switches to an empty basePath and the site is
+    // served at the custom domain's root, so the project-path lines this
+    // fixture's default payload() carries are no longer served at all —
+    // requiring them (the pre-fix bug) would make security.txt advertise a
+    // URL the deploy never serves. Root lines become the correct ones.
+    const dir = makeFixture({ cname: 'onlineimpacts.org' })
+    fixtures.push(dir)
+
+    const result = runDrift(dir)
+
+    expect(result.status).not.toBe(0)
+    // Missing the now-required root lines.
+    expect(result.output).toContain(
+      'Missing: Canonical: https://ffcworkingsite1.org/.well-known/security.txt'
+    )
+    // The project-path lines this fixture ships are now the misdirecting ones.
+    expect(result.output).toContain('misdirects to')
+    expect(result.output).toContain('GitHub Pages subpath')
+    expect(result.output).toContain(
+      'Canonical: https://ffcworkingsite1.org/FFC-EX-onlineimpacts.org/.well-known/security.txt'
+    )
+  })
+
+  it('passes with only root lines once public/CNAME exists', () => {
+    const rootOnly = [
+      'Contact: mailto:clarkemoyer@freeforcharity.org',
+      'Expires: 2027-12-31T00:00:00.000Z',
+      'Preferred-Languages: en',
+      'Canonical: https://ffcworkingsite1.org/.well-known/security.txt',
+      'Canonical: https://ffcworkingsite1.org/security.txt',
+      'Policy: https://ffcworkingsite1.org/vulnerability-disclosure-policy',
+      'Acknowledgments: https://ffcworkingsite1.org/security-acknowledgements',
+      '',
+    ].join('\n')
+    const dir = makeFixture({
+      cname: 'onlineimpacts.org',
+      wellKnown: rootOnly,
+      rootSecurity: rootOnly,
+    })
+    fixtures.push(dir)
+
+    const result = runDrift(dir)
+
+    expect(result.status).toBe(0)
   })
 
   it('fails when .linkinatorrc.json has no skip pattern matching siteConfig.url', () => {

@@ -552,6 +552,16 @@ async function checkSecurityTxtSync(siteConfig) {
   // homepage at its root — publishing bare-origin Canonical/Policy/
   // Acknowledgments lines there would misdirect a security reporter to a
   // different site entirely, not this one (flagged in FFC-EX-onlineimpacts.org#16).
+  // Which URL shape is CORRECT is mutually exclusive, driven by the same
+  // public/CNAME signal deploy.yml uses for NEXT_PUBLIC_BASE_PATH: no CNAME
+  // → the site serves under the GitHub Pages subpath, so only the
+  // project-path lines are real and the root (bare-origin) lines misdirect
+  // to FFC's shared org homepage (see above). CNAME present → the build
+  // switches to an empty basePath and serves at the custom domain's root,
+  // so the project-path lines stop being served at all and it is the ROOT
+  // lines that are now correct — requiring both shapes at once (the
+  // pre-fix bug here) would force security.txt to advertise a project-path
+  // URL the custom-domain deploy never serves.
   const cname = (await readIfExists(join(PUBLIC_DIR, 'CNAME')))?.trim() || null
   const rootLines = [
     `Canonical: ${origin}/.well-known/security.txt`,
@@ -559,12 +569,17 @@ async function checkSecurityTxtSync(siteConfig) {
     `Policy: ${origin}${siteConfig.vulnerabilityDisclosurePath}`,
     `Acknowledgments: ${origin}/security-acknowledgements`,
   ]
+  const correctLines = cname ? rootLines : projectLines
+  const misdirectingLines = cname ? projectLines : rootLines
+  const misdirectingLabel = cname
+    ? `the GitHub Pages subpath ${GITHUB_PAGES_PROJECT_PATH} (public/CNAME is configured, so the ` +
+      `build now serves this site at ${origin}'s root, not that subpath)`
+    : `the shared ${origin} origin (no public/CNAME is configured yet)`
 
   const expectedLines = [
     siteConfig.contactEmail ? `Contact: mailto:${siteConfig.contactEmail}` : null,
     'Preferred-Languages: en',
-    ...projectLines,
-    ...(cname ? rootLines : []),
+    ...correctLines,
   ].filter(Boolean)
 
   for (const line of expectedLines) {
@@ -574,19 +589,14 @@ async function checkSecurityTxtSync(siteConfig) {
     )
   }
 
-  if (!cname) {
-    const payloadsByFile = [
-      ['public/.well-known/security.txt', wellKnownPayload],
-      ['public/security.txt', rootPayload],
-    ]
-    for (const line of rootLines) {
-      for (const [file, payload] of payloadsByFile) {
-        if (!payload.includes(line)) continue
-        errors.push(
-          `${file} has a root-origin line that misdirects to the shared ` +
-            `${origin} origin (no public/CNAME is configured yet): ${line}`
-        )
-      }
+  const payloadsByFile = [
+    ['public/.well-known/security.txt', wellKnownPayload],
+    ['public/security.txt', rootPayload],
+  ]
+  for (const line of misdirectingLines) {
+    for (const [file, payload] of payloadsByFile) {
+      if (!payload.includes(line)) continue
+      errors.push(`${file} has a line that misdirects to ${misdirectingLabel}: ${line}`)
     }
   }
 }
