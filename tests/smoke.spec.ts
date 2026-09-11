@@ -109,12 +109,12 @@ test.describe('Post-deploy smoke tests', () => {
     await page.goto('./')
     const footer = page.locator('footer')
 
-    // Verify all 4 social links
-    for (const [, social] of Object.entries(testConfig.socialLinks)) {
-      const link = footer.locator(`a[href*="${social.url}"]`)
-      await expect(link, `Social link for ${social.ariaLabel}`).toBeVisible()
-      await expect(link).toHaveAttribute('aria-label', social.ariaLabel)
-    }
+    // No validated social links exist for this now-defunct organization
+    // (see src/lib/site.config.ts) — the footer renders none.
+    const socialMediaLinks = footer.locator(
+      'a[aria-label="Facebook"], a[aria-label="X (Twitter)"], a[aria-label="LinkedIn"], a[aria-label="GitHub"]'
+    )
+    await expect(socialMediaLinks).toHaveCount(0)
 
     // Copyright with current year
     const currentYear = new Date().getFullYear()
