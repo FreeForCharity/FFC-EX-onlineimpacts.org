@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { siteConfig } from '../src/lib/site.config'
 
@@ -61,7 +61,20 @@ describe('deployable security artifacts', () => {
     // origin's root, so only the bare-origin lines are real. Branching here
     // means this test stays correct across the eventual custom-domain
     // cutover instead of needing a manual update alongside it.
-    const hasCname = existsSync(join(root, 'public/CNAME'))
+    //
+    // Matches checkSecurityTxtSync's fs.stat().size > 0 exactly (mirroring
+    // deploy.yml's `[ -s "public/CNAME" ]`) rather than mere existence, so a
+    // present-but-empty (0-byte) CNAME is NOT treated as configured here —
+    // existsSync() alone would flip the expected URL shape for that file
+    // while check-drift.mjs and the real deploy both still expect the
+    // project-path lines.
+    let cnameSize = 0
+    try {
+      cnameSize = statSync(join(root, 'public/CNAME')).size
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
+    }
+    const hasCname = cnameSize > 0
     const projectPathLines = [
       `Canonical: ${siteConfig.url}/FFC-EX-onlineimpacts.org/.well-known/security.txt`,
       `Canonical: ${siteConfig.url}/FFC-EX-onlineimpacts.org/security.txt`,
