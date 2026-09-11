@@ -353,6 +353,35 @@ describe('security drift guard', () => {
     expect(result.output).toContain('https://ffcworkingsite1.org')
   })
 
+  // An invalid regex can never match anything, so without this it would be
+  // silently indistinguishable from a pattern that compiles fine but just
+  // doesn't match this origin — someone reading "no pattern matches" would
+  // go add a redundant pattern instead of fixing the broken one.
+  it('reports an invalid regex pattern in "skip" explicitly, not just "no pattern matches"', () => {
+    const dir = makeFixture({
+      linkinatorRc: JSON.stringify({ skip: ['[unterminated'] }),
+    })
+    fixtures.push(dir)
+
+    const result = runDrift(dir)
+
+    expect(result.status).not.toBe(0)
+    expect(result.output).toContain('invalid regex pattern')
+    expect(result.output).toContain('[unterminated')
+  })
+
+  it('fails when .linkinatorrc.json\'s "skip" field is missing or not an array', () => {
+    const dir = makeFixture({
+      linkinatorRc: JSON.stringify({ notSkip: [] }),
+    })
+    fixtures.push(dir)
+
+    const result = runDrift(dir)
+
+    expect(result.status).not.toBe(0)
+    expect(result.output).toContain('"skip" field is missing or not an array')
+  })
+
   it('fails when .linkinatorrc.json is missing', () => {
     const dir = makeFixture({ linkinatorRc: null })
     fixtures.push(dir)

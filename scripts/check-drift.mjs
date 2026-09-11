@@ -664,7 +664,11 @@ async function checkLinkinatorSkipsOwnOrigin(siteConfig) {
     return
   }
 
-  const skip = Array.isArray(parsed.skip) ? parsed.skip : []
+  if (!Array.isArray(parsed.skip)) {
+    errors.push('.linkinatorrc.json\'s "skip" field is missing or not an array.')
+    return
+  }
+  const skip = parsed.skip
   let origin
   try {
     origin = new URL(siteConfig.url).origin
@@ -672,13 +676,27 @@ async function checkLinkinatorSkipsOwnOrigin(siteConfig) {
     return // checkSiteConfigUrl already reports an invalid siteConfig.url.
   }
 
+  // A pattern that fails to compile can never match anything, so it would
+  // otherwise be silently indistinguishable from a pattern that compiles
+  // fine but just doesn't match this origin — reported explicitly instead,
+  // so a malformed regex doesn't get misdiagnosed as "add a pattern for the
+  // origin" when the real fix is "fix this specific broken pattern".
+  const invalidPatterns = []
   const skipsOwnOrigin = skip.some((pattern) => {
     try {
       return new RegExp(pattern).test(`${origin}/`)
-    } catch {
+    } catch (err) {
+      invalidPatterns.push(`${JSON.stringify(pattern)} (${err.message})`)
       return false
     }
   })
+
+  if (invalidPatterns.length) {
+    errors.push(
+      `.linkinatorrc.json's "skip" list has invalid regex pattern(s) that can never match ` +
+        `anything: ${invalidPatterns.join('; ')}.`
+    )
+  }
 
   if (!skipsOwnOrigin) {
     errors.push(

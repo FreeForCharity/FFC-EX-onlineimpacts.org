@@ -51,32 +51,35 @@ describe('deployable security artifacts', () => {
     expect(payload(rootCopy)).toBe(wellKnownPayload)
     expect(wellKnownPayload).toContain(`Contact: mailto:${siteConfig.contactEmail}`)
     expect(wellKnownPayload).toContain('Preferred-Languages: en')
-    expect(wellKnownPayload).toContain(
-      `Canonical: ${siteConfig.url}/FFC-EX-onlineimpacts.org/.well-known/security.txt`
-    )
-    expect(wellKnownPayload).toContain(
-      `Canonical: ${siteConfig.url}/FFC-EX-onlineimpacts.org/security.txt`
-    )
-    expect(wellKnownPayload).toContain(
-      `Policy: ${siteConfig.url}/FFC-EX-onlineimpacts.org${siteConfig.vulnerabilityDisclosurePath}`
-    )
-    expect(wellKnownPayload).toContain(
-      `Acknowledgments: ${siteConfig.url}/FFC-EX-onlineimpacts.org/security-acknowledgements`
-    )
 
-    // No public/CNAME exists yet — siteConfig.url is the *shared*
-    // freeforcharity.github.io origin, so a bare-origin (no project path)
-    // line here would misdirect a reporter to FFC's org homepage rather
-    // than this site. Omit them until a real custom domain is configured
-    // (see scripts/check-drift.mjs checkSecurityTxtSync).
-    expect(wellKnownPayload).not.toContain(`Canonical: ${siteConfig.url}/.well-known/security.txt`)
-    expect(wellKnownPayload).not.toContain(`Canonical: ${siteConfig.url}/security.txt`)
-    expect(wellKnownPayload).not.toContain(
-      `Policy: ${siteConfig.url}${siteConfig.vulnerabilityDisclosurePath}`
-    )
-    expect(wellKnownPayload).not.toContain(
-      `Acknowledgments: ${siteConfig.url}/security-acknowledgements`
-    )
+    // Which URL shape is correct is mutually exclusive and driven by
+    // public/CNAME, exactly like scripts/check-drift.mjs's
+    // checkSecurityTxtSync: no CNAME → siteConfig.url is the *shared*
+    // freeforcharity.github.io origin, so only the project-path lines are
+    // real (a bare-origin line would misdirect a reporter to FFC's org
+    // homepage); CNAME present → the build serves this site at that
+    // origin's root, so only the bare-origin lines are real. Branching here
+    // means this test stays correct across the eventual custom-domain
+    // cutover instead of needing a manual update alongside it.
+    const hasCname = existsSync(join(root, 'public/CNAME'))
+    const projectPathLines = [
+      `Canonical: ${siteConfig.url}/FFC-EX-onlineimpacts.org/.well-known/security.txt`,
+      `Canonical: ${siteConfig.url}/FFC-EX-onlineimpacts.org/security.txt`,
+      `Policy: ${siteConfig.url}/FFC-EX-onlineimpacts.org${siteConfig.vulnerabilityDisclosurePath}`,
+      `Acknowledgments: ${siteConfig.url}/FFC-EX-onlineimpacts.org/security-acknowledgements`,
+    ]
+    const rootLines = [
+      `Canonical: ${siteConfig.url}/.well-known/security.txt`,
+      `Canonical: ${siteConfig.url}/security.txt`,
+      `Policy: ${siteConfig.url}${siteConfig.vulnerabilityDisclosurePath}`,
+      `Acknowledgments: ${siteConfig.url}/security-acknowledgements`,
+    ]
+    const [correctLines, misdirectingLines] = hasCname
+      ? [rootLines, projectPathLines]
+      : [projectPathLines, rootLines]
+
+    for (const line of correctLines) expect(wellKnownPayload).toContain(line)
+    for (const line of misdirectingLines) expect(wellKnownPayload).not.toContain(line)
 
     const expires = wellKnownPayload.match(/^Expires:\s*(.+)$/m)?.[1]
     expect(expires).toBeDefined()
