@@ -6,11 +6,13 @@ import { tmpdir } from 'node:os'
 const syncedCsp =
   "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://www.googletagmanager.com; frame-src https://www.googletagmanager.com; media-src 'self' blob: https:; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
 
-// No public/CNAME is created in these fixtures (see makeFixture below), so
-// the root (no-project-path) Canonical/Policy/Acknowledgments lines are
-// deliberately absent — matching scripts/check-drift.mjs's
-// checkSecurityTxtSync, which only expects/allows them once a real custom
-// domain exists (see FFC-EX-onlineimpacts.org#16).
+// This is the no-public/CNAME shape: the default payload() carries the
+// project-path Canonical/Policy/Acknowledgments lines and omits the root
+// (no-project-path) ones, matching scripts/check-drift.mjs's
+// checkSecurityTxtSync when no custom domain is configured (see
+// FFC-EX-onlineimpacts.org#16). makeFixture() below can still opt a given
+// test into the CNAME-configured state via its `cname` override — see the
+// tests further down that do.
 function payload(expires = '2027-12-31T00:00:00.000Z'): string {
   return [
     'Contact: mailto:clarkemoyer@freeforcharity.org',
