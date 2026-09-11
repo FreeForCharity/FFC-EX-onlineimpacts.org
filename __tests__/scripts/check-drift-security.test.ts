@@ -6,11 +6,13 @@ import { tmpdir } from 'node:os'
 const syncedCsp =
   "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://www.googletagmanager.com; frame-src https://www.googletagmanager.com; media-src 'self' blob: https:; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
 
-// No public/CNAME is created in these fixtures (see makeFixture below), so
-// the root (no-project-path) Canonical/Policy/Acknowledgments lines are
-// deliberately absent — matching scripts/check-drift.mjs's
-// checkSecurityTxtSync, which only expects/allows them once a real custom
-// domain exists (see FFC-EX-onlineimpacts.org#16).
+// This is the no-public/CNAME shape: the default payload() carries the
+// project-path Canonical/Policy/Acknowledgments lines and omits the root
+// (no-project-path) ones, matching scripts/check-drift.mjs's
+// checkSecurityTxtSync when no custom domain is configured (see
+// FFC-EX-onlineimpacts.org#16). makeFixture() below can still opt a given
+// test into the CNAME-configured state via its `cname` override — see the
+// tests further down that do.
 function payload(expires = '2027-12-31T00:00:00.000Z'): string {
   return [
     'Contact: mailto:clarkemoyer@freeforcharity.org',
@@ -26,7 +28,10 @@ function payload(expires = '2027-12-31T00:00:00.000Z'): string {
 
 function makeFixture(
   overrides: Partial<
-    Record<'headers' | 'layout' | 'siteConfig' | 'wellKnown' | 'rootSecurity', string | null>
+    Record<
+      'headers' | 'layout' | 'siteConfig' | 'wellKnown' | 'rootSecurity' | 'linkinatorRc' | 'cname',
+      string | null
+    >
   > = {}
 ) {
   const dir = mkdtempSync(join(tmpdir(), 'ffc-drift-'))
@@ -57,6 +62,8 @@ function makeFixture(
       "export const siteConfig = { url: 'https://ffcworkingsite1.org', vulnerabilityDisclosurePath: '/vulnerability-disclosure-policy' }\n",
     wellKnown: payload(),
     rootSecurity: payload(),
+    linkinatorRc: JSON.stringify({ skip: ['^https://ffcworkingsite1\\.org/.*'] }),
+    cname: null, // absent by default — most fixtures are the no-custom-domain state
     ...overrides,
   }
 
@@ -68,6 +75,9 @@ function makeFixture(
     writeFileSync(join(dir, 'public/.well-known/security.txt'), files.wellKnown)
   if (files.rootSecurity !== null)
     writeFileSync(join(dir, 'public/security.txt'), files.rootSecurity)
+  if (files.cname !== null) writeFileSync(join(dir, 'public/CNAME'), files.cname)
+  if (files.linkinatorRc !== null)
+    writeFileSync(join(dir, '.linkinatorrc.json'), files.linkinatorRc)
 
   return dir
 }
@@ -223,6 +233,197 @@ describe('security drift guard', () => {
     expect(result.output).toContain(
       'Canonical: https://ffcworkingsite1.org/.well-known/security.txt'
     )
+  })
+
+  it('requires root lines (not project-path lines) once public/CNAME exists', () => {
+    // Mirror image of the no-CNAME case above: once a custom domain is
+    // configured, deploy.yml switches to an empty basePath and the site is
+    // served at the custom domain's root, so the project-path lines this
+    // fixture's default payload() carries are no longer served at all —
+    // requiring them (the pre-fix bug) would make security.txt advertise a
+    // URL the deploy never serves. Root lines become the correct ones.
+    const dir = makeFixture({ cname: 'onlineimpacts.org' })
+    fixtures.push(dir)
+
+    const result = runDrift(dir)
+
+    expect(result.status).not.toBe(0)
+    // Missing the now-required root lines.
+    expect(result.output).toContain(
+      'Missing: Canonical: https://ffcworkingsite1.org/.well-known/security.txt'
+    )
+    // The project-path lines this fixture ships are now the misdirecting ones.
+    expect(result.output).toContain('misdirects to')
+    expect(result.output).toContain('GitHub Pages subpath')
+    expect(result.output).toContain(
+      'Canonical: https://ffcworkingsite1.org/FFC-EX-onlineimpacts.org/.well-known/security.txt'
+    )
+  })
+
+  it("treats a whitespace-only public/CNAME as configured, matching deploy.yml's `[ -s ... ]` check", () => {
+    // deploy.yml decides the basePath with `[ -s "public/CNAME" ]`, which
+    // tests non-empty file SIZE, not trimmed content — a stray "\n" is
+    // non-empty, so deploy.yml serves the custom domain's root. This guard
+    // must reach the same verdict rather than trimming the content down to
+    // an empty string and treating that as "no CNAME".
+    const dir = makeFixture({ cname: '\n' })
+    fixtures.push(dir)
+
+    const result = runDrift(dir)
+
+    expect(result.status).not.toBe(0)
+    expect(result.output).toContain(
+      'Missing: Canonical: https://ffcworkingsite1.org/.well-known/security.txt'
+    )
+    expect(result.output).toContain('misdirects to')
+    expect(result.output).toContain('GitHub Pages subpath')
+  })
+
+  it('treats a truly empty (0-byte) public/CNAME as NOT configured, unlike the whitespace case above', () => {
+    // The boundary this guard now runs on is fs.stat()'s size, not whether
+    // readFile() succeeded — a 0-byte file has stat size 0, matching
+    // deploy.yml's `[ -s ... ]` being false, so this must still require the
+    // project-path lines exactly as if public/CNAME were absent.
+    const dir = makeFixture({ cname: '' })
+    fixtures.push(dir)
+
+    const result = runDrift(dir)
+
+    expect(result.status).toBe(0)
+  })
+
+  it('treats an unreadable/non-file public/CNAME as configured too, alongside its own read-error report', () => {
+    // deploy.yml's `[ -s "public/CNAME" ]` is a stat test — it does not care
+    // whether the entry is readable, and a directory at that path has a
+    // non-zero stat size, so deploy.yml would still serve the custom
+    // domain's root. readIfExists() would have collapsed any read error
+    // (e.g. EISDIR) to null ("no CNAME"), silently disagreeing with
+    // deploy.yml about which security.txt URL shape is correct. Using
+    // readForCspCheck() instead reports the read error as its own finding
+    // AND still treats the guard's CNAME state as "configured".
+    const dir = makeFixture({ cname: null })
+    fixtures.push(dir)
+    mkdirSync(join(dir, 'public/CNAME'))
+
+    const result = runDrift(dir)
+
+    expect(result.status).not.toBe(0)
+    expect(result.output).toContain('Could not read public/CNAME')
+    expect(result.output).toContain(
+      'Missing: Canonical: https://ffcworkingsite1.org/.well-known/security.txt'
+    )
+    expect(result.output).toContain('misdirects to')
+    expect(result.output).toContain('GitHub Pages subpath')
+  })
+
+  it('passes with only root lines once public/CNAME exists', () => {
+    const rootOnly = [
+      'Contact: mailto:clarkemoyer@freeforcharity.org',
+      'Expires: 2027-12-31T00:00:00.000Z',
+      'Preferred-Languages: en',
+      'Canonical: https://ffcworkingsite1.org/.well-known/security.txt',
+      'Canonical: https://ffcworkingsite1.org/security.txt',
+      'Policy: https://ffcworkingsite1.org/vulnerability-disclosure-policy',
+      'Acknowledgments: https://ffcworkingsite1.org/security-acknowledgements',
+      '',
+    ].join('\n')
+    const dir = makeFixture({
+      cname: 'onlineimpacts.org',
+      wellKnown: rootOnly,
+      rootSecurity: rootOnly,
+    })
+    fixtures.push(dir)
+
+    const result = runDrift(dir)
+
+    expect(result.status).toBe(0)
+  })
+
+  it('fails when .linkinatorrc.json has no skip pattern matching siteConfig.url', () => {
+    // .linkinatorrc.json exists to exclude this site's own production
+    // origin from the link-check network crawl (see scripts/check-links.mjs)
+    // — a skip list that names some other host does not do that.
+    const dir = makeFixture({
+      linkinatorRc: JSON.stringify({ skip: ['^https://example-custom-domain\\.org/.*'] }),
+    })
+    fixtures.push(dir)
+
+    const result = runDrift(dir)
+
+    expect(result.status).not.toBe(0)
+    expect(result.output).toContain('.linkinatorrc.json')
+    expect(result.output).toContain('https://ffcworkingsite1.org')
+  })
+
+  // An invalid regex can never match anything, so without this it would be
+  // silently indistinguishable from a pattern that compiles fine but just
+  // doesn't match this origin — someone reading "no pattern matches" would
+  // go add a redundant pattern instead of fixing the broken one.
+  it('reports an invalid regex pattern in "skip" explicitly, not just "no pattern matches"', () => {
+    const dir = makeFixture({
+      linkinatorRc: JSON.stringify({ skip: ['[unterminated'] }),
+    })
+    fixtures.push(dir)
+
+    const result = runDrift(dir)
+
+    expect(result.status).not.toBe(0)
+    expect(result.output).toContain('invalid regex pattern')
+    expect(result.output).toContain('[unterminated')
+  })
+
+  it('fails when .linkinatorrc.json\'s "skip" field is missing or not an array', () => {
+    const dir = makeFixture({
+      linkinatorRc: JSON.stringify({ notSkip: [] }),
+    })
+    fixtures.push(dir)
+
+    const result = runDrift(dir)
+
+    expect(result.status).not.toBe(0)
+    expect(result.output).toContain('"skip" field is missing or not an array')
+  })
+
+  it('fails when .linkinatorrc.json is missing', () => {
+    const dir = makeFixture({ linkinatorRc: null })
+    fixtures.push(dir)
+
+    const result = runDrift(dir)
+
+    expect(result.status).not.toBe(0)
+    expect(result.output).toContain('.linkinatorrc.json is missing')
+  })
+
+  // readForCspCheck() returns null for ENOENT but an empty string for a
+  // present-but-empty file — those are different facts, and only the first
+  // one is "missing". An `if (!body)` check would conflate them and hide the
+  // more accurate "not valid JSON" diagnosis behind a "go restore the file
+  // you already have" one.
+  it('reports "not valid JSON", not "is missing", when .linkinatorrc.json is present but empty', () => {
+    const dir = makeFixture({ linkinatorRc: '' })
+    fixtures.push(dir)
+
+    const result = runDrift(dir)
+
+    expect(result.status).not.toBe(0)
+    expect(result.output).toContain('.linkinatorrc.json is not valid JSON')
+    expect(result.output).not.toContain('.linkinatorrc.json is missing')
+  })
+
+  // Same distinction as the _headers tests above: a file that exists but
+  // cannot be read is not the same fact as it being absent, and must not be
+  // misreported as "missing" (which would send the reader to restore a file
+  // they already have instead of fixing the read error).
+  it('errors with "Could not read", not "is missing", when .linkinatorrc.json cannot be read', () => {
+    const dir = makeFixture({ linkinatorRc: null })
+    fixtures.push(dir)
+    mkdirSync(join(dir, '.linkinatorrc.json'))
+
+    const result = runDrift(dir)
+
+    expect(result.status).not.toBe(0)
+    expect(result.output).toContain('Could not read .linkinatorrc.json')
+    expect(result.output).not.toContain('.linkinatorrc.json is missing')
   })
 
   it('fails when siteConfig.url is not a bare https origin', () => {

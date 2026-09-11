@@ -13,7 +13,7 @@
  *
  * Exits non-zero on errors; warnings do not fail the check.
  */
-import { readdir, readFile } from 'node:fs/promises'
+import { readdir, readFile, stat } from 'node:fs/promises'
 import { dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -382,11 +382,13 @@ function checkSiteConfigUrl(siteConfig) {
 //   rule on the zone (Cloudflare Transform Rule); fleet posture is measured by
 //   FFC-Cloudflare-Automation#894.
 // Deliberately separate from the shared readIfExists(), which several other
-// checks call and whose falsy-means-absent contract they rely on. Only this
-// check downgrades "absent" to a warning, so only this check needs to tell
-// "absent" apart from "present but unreadable" — otherwise a permission or I/O
-// error would be reported as a missing file (sending the reader to restore a
-// file that is already there) and, being a mere warning, would let the run pass.
+// checks call and whose falsy-means-absent contract they rely on. This check
+// (originally just the CSP one, now also .linkinatorrc.json's and
+// public/CNAME's) needs to tell "absent" apart from "present but unreadable"
+// — otherwise a permission or I/O error would be reported as a missing file,
+// sending the reader to restore a file that is already there rather than fix
+// the actual read error. For the CSP check that distinction also matters for
+// severity, since it downgrades a genuinely absent file to a warning.
 const UNREADABLE = Symbol('unreadable')
 
 async function readForCspCheck(path) {
@@ -402,7 +404,7 @@ async function readForCspCheck(path) {
     errors.push(
       `Could not read ${rel} (${err.code || err.message}). ` +
         `The file is present but unreadable — this is not the same as it being absent, ` +
-        `so fix the read error rather than restoring the file from the template.`
+        `so fix the read error rather than assuming the file needs to be restored or recreated.`
     )
     return UNREADABLE
   }
@@ -550,19 +552,66 @@ async function checkSecurityTxtSync(siteConfig) {
   // homepage at its root — publishing bare-origin Canonical/Policy/
   // Acknowledgments lines there would misdirect a security reporter to a
   // different site entirely, not this one (flagged in FFC-EX-onlineimpacts.org#16).
-  const cname = (await readIfExists(join(PUBLIC_DIR, 'CNAME')))?.trim() || null
+  // Which URL shape is CORRECT is mutually exclusive, driven by the same
+  // public/CNAME signal deploy.yml uses for NEXT_PUBLIC_BASE_PATH: no CNAME
+  // → the site serves under the GitHub Pages subpath, so only the
+  // project-path lines are real and the root (bare-origin) lines misdirect
+  // to FFC's shared org homepage (see above). CNAME present → the build
+  // switches to an empty basePath and serves at the custom domain's root,
+  // so the project-path lines stop being served at all and it is the ROOT
+  // lines that are now correct — requiring both shapes at once (the
+  // pre-fix bug here) would force security.txt to advertise a project-path
+  // URL the custom-domain deploy never serves.
+  // Mirror deploy.yml's `[ -s "public/CNAME" ]` check exactly for the
+  // basePath DECISION: that is a stat test for non-empty file SIZE, not
+  // trimmed content or successfully-read content. fs.stat() (not readFile)
+  // decides it here for the same reason `-s` doesn't need read access in
+  // bash: stat only needs search permission on the parent directories, not
+  // read permission on the file itself. That distinction is not academic —
+  // basing the verdict on whether readFile() *succeeded* (an earlier version
+  // of this fix) gets the unreadable-but-EMPTY case backwards: deploy.yml's
+  // `-s` sees size 0 and picks the subpath basePath regardless of
+  // readability, but a readFile-based guard can't tell "empty" from
+  // "unreadable" and would wrongly call it configured. stat() sidesteps
+  // that: a directory or a non-empty-but-unreadable file still has a
+  // non-zero stat size (so still counts as configured, matching `-s`), and
+  // an unreadable-but-empty one now correctly does not. (deploy.yml
+  // separately `cat`s the file right after for a log line, which would
+  // itself fail on a directory or other unreadable entry — that's
+  // deploy.yml's own fragility to fix there, not something this
+  // basePath-shape guard needs to reproduce.) readForCspCheck() below is
+  // called purely to surface an unreadable CNAME as its own separate
+  // finding; it no longer drives the configured/not-configured verdict.
+  let cnameSize = 0
+  try {
+    cnameSize = (await stat(join(PUBLIC_DIR, 'CNAME'))).size
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      errors.push(
+        `Could not stat public/CNAME (${err.code || err.message}) — fix the stat error rather ` +
+          'than assuming the file is absent.'
+      )
+    }
+  }
+  const hasCname = cnameSize > 0
+  await readForCspCheck(join(PUBLIC_DIR, 'CNAME'))
   const rootLines = [
     `Canonical: ${origin}/.well-known/security.txt`,
     `Canonical: ${origin}/security.txt`,
     `Policy: ${origin}${siteConfig.vulnerabilityDisclosurePath}`,
     `Acknowledgments: ${origin}/security-acknowledgements`,
   ]
+  const correctLines = hasCname ? rootLines : projectLines
+  const misdirectingLines = hasCname ? projectLines : rootLines
+  const misdirectingLabel = hasCname
+    ? `the GitHub Pages subpath ${GITHUB_PAGES_PROJECT_PATH} (public/CNAME is configured, so the ` +
+      `build now serves this site at ${origin}'s root, not that subpath)`
+    : `the shared ${origin} origin (no public/CNAME is configured yet)`
 
   const expectedLines = [
     siteConfig.contactEmail ? `Contact: mailto:${siteConfig.contactEmail}` : null,
     'Preferred-Languages: en',
-    ...projectLines,
-    ...(cname ? rootLines : []),
+    ...correctLines,
   ].filter(Boolean)
 
   for (const line of expectedLines) {
@@ -572,14 +621,89 @@ async function checkSecurityTxtSync(siteConfig) {
     )
   }
 
-  if (!cname) {
-    for (const line of rootLines) {
-      if (!wellKnownPayload.includes(line)) continue
-      errors.push(
-        `public/.well-known/security.txt has a root-origin line that misdirects to the shared ` +
-          `${origin} homepage (no public/CNAME is configured yet): ${line}`
-      )
+  const payloadsByFile = [
+    ['public/.well-known/security.txt', wellKnownPayload],
+    ['public/security.txt', rootPayload],
+  ]
+  for (const line of misdirectingLines) {
+    for (const [file, payload] of payloadsByFile) {
+      if (!payload.includes(line)) continue
+      errors.push(`${file} has a line that misdirects to ${misdirectingLabel}: ${line}`)
     }
+  }
+}
+
+/**
+ * .linkinatorrc.json's `skip` list is meant to exclude this site's own
+ * production origin from the link-check network crawl (see the comment at
+ * the top of scripts/check-links.mjs) — checking it against the real
+ * network would validate the build against whatever the PREVIOUS deploy
+ * happened to serve, not this commit. That skip list is a hand-maintained
+ * regex array, not derived from siteConfig.url, so it silently stops doing
+ * its job the moment siteConfig.url's origin changes for any reason —
+ * including the eventual custom-domain cutover (public/CNAME), which is
+ * exactly when this bites hardest, per the same review that flagged the
+ * `security.txt` misdirection this file also guards against.
+ */
+async function checkLinkinatorSkipsOwnOrigin(siteConfig) {
+  if (!siteConfig?.url) return
+
+  const configPath = join(ROOT, '.linkinatorrc.json')
+  const body = await readForCspCheck(configPath)
+  if (body === UNREADABLE) return // readForCspCheck already reported the read error.
+  if (body === null) {
+    errors.push('.linkinatorrc.json is missing. Add a skip list that excludes siteConfig.url.')
+    return
+  }
+
+  let parsed
+  try {
+    parsed = JSON.parse(body)
+  } catch {
+    errors.push('.linkinatorrc.json is not valid JSON.')
+    return
+  }
+
+  if (!Array.isArray(parsed.skip)) {
+    errors.push('.linkinatorrc.json\'s "skip" field is missing or not an array.')
+    return
+  }
+  const skip = parsed.skip
+  let origin
+  try {
+    origin = new URL(siteConfig.url).origin
+  } catch {
+    return // checkSiteConfigUrl already reports an invalid siteConfig.url.
+  }
+
+  // A pattern that fails to compile can never match anything, so it would
+  // otherwise be silently indistinguishable from a pattern that compiles
+  // fine but just doesn't match this origin — reported explicitly instead,
+  // so a malformed regex doesn't get misdiagnosed as "add a pattern for the
+  // origin" when the real fix is "fix this specific broken pattern".
+  const invalidPatterns = []
+  const skipsOwnOrigin = skip.some((pattern) => {
+    try {
+      return new RegExp(pattern).test(`${origin}/`)
+    } catch (err) {
+      invalidPatterns.push(`${JSON.stringify(pattern)} (${err.message})`)
+      return false
+    }
+  })
+
+  if (invalidPatterns.length) {
+    errors.push(
+      `.linkinatorrc.json's "skip" list has invalid regex pattern(s) that can never match ` +
+        `anything: ${invalidPatterns.join('; ')}.`
+    )
+  }
+
+  if (!skipsOwnOrigin) {
+    errors.push(
+      `.linkinatorrc.json's "skip" list has no pattern matching siteConfig.url's origin ` +
+        `(${origin}) — the link check will crawl it over the real network instead of ` +
+        'skipping it, validating this commit against whatever the previous deploy served.'
+    )
   }
 }
 
@@ -591,6 +715,7 @@ await checkSecrets()
 await checkPlaceholderUrl(siteConfig)
 await checkCspSync()
 await checkSecurityTxtSync(siteConfig)
+await checkLinkinatorSkipsOwnOrigin(siteConfig)
 
 if (warnings.length) {
   console.warn('\nDrift warnings:')
