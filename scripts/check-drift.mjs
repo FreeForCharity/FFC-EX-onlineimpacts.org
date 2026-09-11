@@ -383,12 +383,12 @@ function checkSiteConfigUrl(siteConfig) {
 //   FFC-Cloudflare-Automation#894.
 // Deliberately separate from the shared readIfExists(), which several other
 // checks call and whose falsy-means-absent contract they rely on. This check
-// (originally just the CSP one, now also .linkinatorrc.json's) needs to tell
-// "absent" apart from "present but unreadable" — otherwise a permission or I/O
-// error would be reported as a missing file, sending the reader to restore a
-// file that is already there rather than fix the actual read error. For the
-// CSP check that distinction also matters for severity, since it downgrades
-// a genuinely absent file to a warning.
+// (originally just the CSP one, now also .linkinatorrc.json's and
+// public/CNAME's) needs to tell "absent" apart from "present but unreadable"
+// — otherwise a permission or I/O error would be reported as a missing file,
+// sending the reader to restore a file that is already there rather than fix
+// the actual read error. For the CSP check that distinction also matters for
+// severity, since it downgrades a genuinely absent file to a warning.
 const UNREADABLE = Symbol('unreadable')
 
 async function readForCspCheck(path) {
@@ -404,7 +404,7 @@ async function readForCspCheck(path) {
     errors.push(
       `Could not read ${rel} (${err.code || err.message}). ` +
         `The file is present but unreadable — this is not the same as it being absent, ` +
-        `so fix the read error rather than restoring the file from the template.`
+        `so fix the read error rather than assuming the file needs to be restored or recreated.`
     )
     return UNREADABLE
   }
