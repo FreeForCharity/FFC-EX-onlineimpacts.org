@@ -277,6 +277,19 @@ describe('security drift guard', () => {
     expect(result.output).toContain('GitHub Pages subpath')
   })
 
+  it('treats a truly empty (0-byte) public/CNAME as NOT configured, unlike the whitespace case above', () => {
+    // The boundary this guard now runs on is fs.stat()'s size, not whether
+    // readFile() succeeded — a 0-byte file has stat size 0, matching
+    // deploy.yml's `[ -s ... ]` being false, so this must still require the
+    // project-path lines exactly as if public/CNAME were absent.
+    const dir = makeFixture({ cname: '' })
+    fixtures.push(dir)
+
+    const result = runDrift(dir)
+
+    expect(result.status).toBe(0)
+  })
+
   it('treats an unreadable/non-file public/CNAME as configured too, alongside its own read-error report', () => {
     // deploy.yml's `[ -s "public/CNAME" ]` is a stat test — it does not care
     // whether the entry is readable, and a directory at that path has a

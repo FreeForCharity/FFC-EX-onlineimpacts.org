@@ -13,7 +13,7 @@
  *
  * Exits non-zero on errors; warnings do not fail the check.
  */
-import { readdir, readFile } from 'node:fs/promises'
+import { readdir, readFile, stat } from 'node:fs/promises'
 import { dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -564,19 +564,38 @@ async function checkSecurityTxtSync(siteConfig) {
   // URL the custom-domain deploy never serves.
   // Mirror deploy.yml's `[ -s "public/CNAME" ]` check exactly for the
   // basePath DECISION: that is a stat test for non-empty file SIZE, not
-  // trimmed content, and the decision itself does not care whether the file
-  // is readable — a directory at that path has a non-zero stat size too, so
-  // `-s` reports it as present. (deploy.yml separately `cat`s the file right
-  // after for a log line, which would itself fail on a directory or other
-  // unreadable entry — that is deploy.yml's own fragility to fix there, not
-  // something this basePath-shape guard needs to reproduce.) A whitespace-only
-  // file (e.g. a stray "\n") is non-empty for the same reason `-s` sees it as
-  // present. readForCspCheck() (not readIfExists()) is used here so an
-  // unreadable/non-file CNAME is reported as its own read error AND still
-  // counts as "configured" below — collapsing it to "no CNAME" would let
-  // this guard silently disagree with deploy.yml's `-s` verdict.
-  const cnameRaw = await readForCspCheck(join(PUBLIC_DIR, 'CNAME'))
-  const cname = cnameRaw === UNREADABLE ? true : Boolean(cnameRaw && cnameRaw.length > 0)
+  // trimmed content or successfully-read content. fs.stat() (not readFile)
+  // decides it here for the same reason `-s` doesn't need read access in
+  // bash: stat only needs search permission on the parent directories, not
+  // read permission on the file itself. That distinction is not academic —
+  // basing the verdict on whether readFile() *succeeded* (an earlier version
+  // of this fix) gets the unreadable-but-EMPTY case backwards: deploy.yml's
+  // `-s` sees size 0 and picks the subpath basePath regardless of
+  // readability, but a readFile-based guard can't tell "empty" from
+  // "unreadable" and would wrongly call it configured. stat() sidesteps
+  // that: a directory or a non-empty-but-unreadable file still has a
+  // non-zero stat size (so still counts as configured, matching `-s`), and
+  // an unreadable-but-empty one now correctly does not. (deploy.yml
+  // separately `cat`s the file right after for a log line, which would
+  // itself fail on a directory or other unreadable entry — that's
+  // deploy.yml's own fragility to fix there, not something this
+  // basePath-shape guard needs to reproduce.) readForCspCheck() below is
+  // called purely to surface an unreadable CNAME as its own separate
+  // finding; it no longer drives the configured/not-configured verdict.
+  let cnameSize = 0
+  try {
+    cnameSize = (await stat(join(PUBLIC_DIR, 'CNAME'))).size
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      errors.push(
+        `Could not stat public/CNAME (${err.code || err.message}). ` +
+          'The file is present but its size could not be determined — fix the stat error ' +
+          'rather than assuming the file is absent.'
+      )
+    }
+  }
+  const cname = cnameSize > 0
+  await readForCspCheck(join(PUBLIC_DIR, 'CNAME'))
   const rootLines = [
     `Canonical: ${origin}/.well-known/security.txt`,
     `Canonical: ${origin}/security.txt`,
