@@ -26,7 +26,10 @@ function payload(expires = '2027-12-31T00:00:00.000Z'): string {
 
 function makeFixture(
   overrides: Partial<
-    Record<'headers' | 'layout' | 'siteConfig' | 'wellKnown' | 'rootSecurity', string | null>
+    Record<
+      'headers' | 'layout' | 'siteConfig' | 'wellKnown' | 'rootSecurity' | 'linkinatorRc',
+      string | null
+    >
   > = {}
 ) {
   const dir = mkdtempSync(join(tmpdir(), 'ffc-drift-'))
@@ -57,6 +60,7 @@ function makeFixture(
       "export const siteConfig = { url: 'https://ffcworkingsite1.org', vulnerabilityDisclosurePath: '/vulnerability-disclosure-policy' }\n",
     wellKnown: payload(),
     rootSecurity: payload(),
+    linkinatorRc: JSON.stringify({ skip: ['^https://ffcworkingsite1\\.org/.*'] }),
     ...overrides,
   }
 
@@ -68,6 +72,8 @@ function makeFixture(
     writeFileSync(join(dir, 'public/.well-known/security.txt'), files.wellKnown)
   if (files.rootSecurity !== null)
     writeFileSync(join(dir, 'public/security.txt'), files.rootSecurity)
+  if (files.linkinatorRc !== null)
+    writeFileSync(join(dir, '.linkinatorrc.json'), files.linkinatorRc)
 
   return dir
 }
@@ -223,6 +229,32 @@ describe('security drift guard', () => {
     expect(result.output).toContain(
       'Canonical: https://ffcworkingsite1.org/.well-known/security.txt'
     )
+  })
+
+  it('fails when .linkinatorrc.json has no skip pattern matching siteConfig.url', () => {
+    // .linkinatorrc.json exists to exclude this site's own production
+    // origin from the link-check network crawl (see scripts/check-links.mjs)
+    // — a skip list that names some other host does not do that.
+    const dir = makeFixture({
+      linkinatorRc: JSON.stringify({ skip: ['^https://example-custom-domain\\.org/.*'] }),
+    })
+    fixtures.push(dir)
+
+    const result = runDrift(dir)
+
+    expect(result.status).not.toBe(0)
+    expect(result.output).toContain('.linkinatorrc.json')
+    expect(result.output).toContain('https://ffcworkingsite1.org')
+  })
+
+  it('fails when .linkinatorrc.json is missing', () => {
+    const dir = makeFixture({ linkinatorRc: null })
+    fixtures.push(dir)
+
+    const result = runDrift(dir)
+
+    expect(result.status).not.toBe(0)
+    expect(result.output).toContain('.linkinatorrc.json is missing')
   })
 
   it('fails when siteConfig.url is not a bare https origin', () => {

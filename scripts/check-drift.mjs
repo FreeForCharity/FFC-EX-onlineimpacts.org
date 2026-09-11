@@ -589,6 +589,61 @@ async function checkSecurityTxtSync(siteConfig) {
   }
 }
 
+/**
+ * .linkinatorrc.json's `skip` list is meant to exclude this site's own
+ * production origin from the link-check network crawl (see the comment at
+ * the top of scripts/check-links.mjs) — checking it against the real
+ * network would validate the build against whatever the PREVIOUS deploy
+ * happened to serve, not this commit. That skip list is a hand-maintained
+ * regex array, not derived from siteConfig.url, so it silently stops doing
+ * its job the moment siteConfig.url's origin changes for any reason —
+ * including the eventual custom-domain cutover (public/CNAME), which is
+ * exactly when this bites hardest, per the same review that flagged the
+ * `security.txt` misdirection this file also guards against.
+ */
+async function checkLinkinatorSkipsOwnOrigin(siteConfig) {
+  if (!siteConfig?.url) return
+
+  const configPath = join(ROOT, '.linkinatorrc.json')
+  const body = await readIfExists(configPath)
+  if (!body) {
+    errors.push('.linkinatorrc.json is missing. Add a skip list that excludes siteConfig.url.')
+    return
+  }
+
+  let parsed
+  try {
+    parsed = JSON.parse(body)
+  } catch {
+    errors.push('.linkinatorrc.json is not valid JSON.')
+    return
+  }
+
+  const skip = Array.isArray(parsed.skip) ? parsed.skip : []
+  let origin
+  try {
+    origin = new URL(siteConfig.url).origin
+  } catch {
+    return // checkSiteConfigUrl already reports an invalid siteConfig.url.
+  }
+
+  const skipsOwnOrigin = skip.some((pattern) => {
+    try {
+      return new RegExp(pattern).test(`${origin}/`)
+    } catch {
+      return false
+    }
+  })
+
+  if (!skipsOwnOrigin) {
+    errors.push(
+      `.linkinatorrc.json's "skip" list has no pattern matching siteConfig.url's origin ` +
+        `(${origin}) — the link check will crawl it over the real network instead of ` +
+        'skipping it, validating this commit against whatever the previous deploy served.'
+    )
+  }
+}
+
 const siteConfig = await readSiteConfig()
 checkSiteConfigUrl(siteConfig)
 await checkKebabCaseRoutes()
@@ -597,6 +652,7 @@ await checkSecrets()
 await checkPlaceholderUrl(siteConfig)
 await checkCspSync()
 await checkSecurityTxtSync(siteConfig)
+await checkLinkinatorSkipsOwnOrigin(siteConfig)
 
 if (warnings.length) {
   console.warn('\nDrift warnings:')
