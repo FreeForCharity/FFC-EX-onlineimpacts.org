@@ -582,7 +582,7 @@ async function checkSecurityTxtSync(siteConfig) {
         if (!payload.includes(line)) continue
         errors.push(
           `${file} has a root-origin line that misdirects to the shared ` +
-            `${origin} homepage (no public/CNAME is configured yet): ${line}`
+            `${origin} origin (no public/CNAME is configured yet): ${line}`
         )
       }
     }
