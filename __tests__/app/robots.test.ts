@@ -36,16 +36,16 @@ describe('robots.txt generation', () => {
   it('should use the correct base URL', () => {
     delete process.env.NEXT_PUBLIC_BASE_PATH
     const result = robots()
-    expect(result.sitemap).toContain('ffcworkingsite1.org')
+    expect(result.sitemap).toContain('freeforcharity.github.io')
   })
 
   it('should include GitHub Pages base path in sitemap URL when configured', () => {
-    process.env.NEXT_PUBLIC_BASE_PATH = '/FFC-IN-Footer_Only_Template'
+    process.env.NEXT_PUBLIC_BASE_PATH = '/FFC-EX-onlineimpacts.org'
 
     const result = robots()
 
     expect(result.sitemap).toBe(
-      'https://ffcworkingsite1.org/FFC-IN-Footer_Only_Template/sitemap.xml'
+      'https://freeforcharity.github.io/FFC-EX-onlineimpacts.org/sitemap.xml'
     )
   })
 })

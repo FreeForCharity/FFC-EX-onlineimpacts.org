@@ -110,54 +110,62 @@ export type SiteConfig = {
   parentOrg?: { name: string; url: string; hubUrl: string }
 }
 
+/**
+ * Sentinel for a SiteConfig string field with no validated value yet.
+ *
+ * The shared cross-template schema (schema/site-config.schema.json)
+ * requires `ein`, `phone.display`, `phone.tel`, `guidestar.profileUrl` and
+ * `guidestar.directProfileUrl` to be non-empty strings — so `''` (the
+ * pattern used for an optional `social[].href`) is not available here.
+ * This sentinel satisfies that constraint without asserting a fact we have
+ * not validated. Consumers (Footer) must compare against this constant
+ * rather than truthiness before rendering the value or a link built from
+ * it — see hasValidatedNonprofitStatus and the phone guard below.
+ */
+export const NOT_YET_AVAILABLE = 'Not yet available'
+
 export const siteConfig: SiteConfig = {
-  name: 'Free For Charity',
-  tagline: 'Reduce Costs, Increase Impact',
+  // Online Impacts closed and merged its services into Free For Charity
+  // (see the live "Coming Soon" notice at onlineimpacts.org, captured
+  // verbatim as this site's only page). It is not an active, operating
+  // nonprofit any more, so EIN/phone/address/GuideStar below are left as
+  // NOT_YET_AVAILABLE (Level 1 footer) rather than asserting ongoing
+  // 501(c)(3) status for a defunct entity — see FFC-Cloudflare-Automation
+  // #702, tracking issue #14 in this repo.
+  name: 'Online Impacts',
+  tagline: 'Merged with Free For Charity',
   description:
-    'Free For Charity connects students, professionals, and businesses with nonprofits to reduce costs and increase revenues—putting more resources back into their missions.',
+    'Online Impacts was a nonprofit that built websites and offered free tech help to other nonprofits. It has merged its services into Free For Charity — nonprofits it previously hosted or developed for should migrate there.',
   shortDescription:
-    'Connecting students, professionals, and businesses with nonprofits to reduce costs and increase revenues.',
-  url: 'https://ffcworkingsite1.org',
-  twitterHandle: '@freeforcharity',
+    'Online Impacts has merged with Free For Charity. Nonprofits it hosted or developed for should migrate there.',
+  // No custom domain is configured yet (this migration phase serves the
+  // default GitHub Pages URL — see public/CNAME, intentionally absent).
+  // Bare origin ONLY — see the nu4children.org precedent comment this was
+  // copied from: the GitHub Pages subpath is supplied separately by
+  // NEXT_PUBLIC_BASE_PATH via sitePath()/assetPath().
+  url: 'https://freeforcharity.github.io',
+  twitterHandle: '',
+  // Online Impacts is defunct; direct any inquiry to FFC, which now owns
+  // its former relationships (same address the merge notice itself links to).
   contactEmail: 'clarkemoyer@freeforcharity.org',
-  keywords: [
-    'nonprofit',
-    'charity',
-    'volunteer',
-    'donate',
-    'free hosting',
-    'domains',
-    'Microsoft 365',
-  ],
+  keywords: ['nonprofit', 'charity', 'free hosting', 'free web development', 'merged'],
   themeColor: '#ffffff',
   vulnerabilityDisclosurePath: '/vulnerability-disclosure-policy',
-  social: [
-    { label: 'Facebook', href: 'https://www.facebook.com/freeforcharity' },
-    { label: 'X (Twitter)', href: 'https://x.com/freeforcharity1' },
-    { label: 'LinkedIn', href: 'https://www.linkedin.com/company/freeforcharity/' },
-    // Repo name uses underscores — the hyphenated variant 404s.
-    { label: 'GitHub', href: 'https://github.com/FreeForCharity/FFC-IN-Footer_Only_Template' },
-  ],
-  ein: '46-2471893',
-  phone: { display: '(520) 222-8104', tel: '5202228104' },
-  addresses: [
-    {
-      label: 'Main Address',
-      lines: ['4030 Wake Forrest Road', 'Suite 349 Raleigh North', 'Carolina 27609'],
-      mapUrl:
-        'https://www.google.com/maps/search/?api=1&query=4030+Wake+Forrest+Road+Suite+349+Raleigh+NC+27609',
-    },
-    {
-      label: 'PA Office Address',
-      lines: ['301 Science Park Road Suite', '119 State College PA 16803'],
-      mapUrl:
-        'https://www.google.com/maps/place/Free+For+Charity/@40.7768455,-77.8963305,17z/data=!3m1!4b1!4m6!3m5!1s0x89cea944b44a2e01:0x6fc2d6bf09e00a0f!8m2!3d40.7768415!4d-77.8937556!16s%2Fg%2F11vzvbl2d7?entry=ttu&g_ep=EgoyMDI1MTEyMy4xIKXMDSoASAFQAw%3D%3D',
-    },
-  ],
+  social: [],
+  // No EIN could be validated for this now-defunct organization — do not
+  // fill this in without a validated source. See NOT_YET_AVAILABLE above.
+  // Written as the literal string, NOT the NOT_YET_AVAILABLE identifier:
+  // scripts/check-site-config.mjs statically extracts this object literal
+  // and evaluates it without resolving imports/identifiers ("must be plain
+  // data"), so referencing the constant here breaks that check. Keep these
+  // strings identical to NOT_YET_AVAILABLE above — a mismatch only breaks
+  // the Level 1/2 gate silently.
+  ein: 'Not yet available',
+  phone: { display: 'Not yet available', tel: 'Not yet available' },
+  addresses: [],
   guidestar: {
-    profileUrl: 'https://www.guidestar.org/profile/46-2471893',
-    directProfileUrl:
-      'https://www.guidestar.org/profile/shared/bbbe173a-87b9-4af9-a8a2-cae255a95742',
+    profileUrl: 'Not yet available',
+    directProfileUrl: 'Not yet available',
   },
   supportedBy: {
     name: 'Free For Charity',

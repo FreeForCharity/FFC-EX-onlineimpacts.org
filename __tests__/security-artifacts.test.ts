@@ -51,25 +51,31 @@ describe('deployable security artifacts', () => {
     expect(payload(rootCopy)).toBe(wellKnownPayload)
     expect(wellKnownPayload).toContain(`Contact: mailto:${siteConfig.contactEmail}`)
     expect(wellKnownPayload).toContain('Preferred-Languages: en')
-    expect(wellKnownPayload).toContain(`Canonical: ${siteConfig.url}/.well-known/security.txt`)
-    expect(wellKnownPayload).toContain(`Canonical: ${siteConfig.url}/security.txt`)
     expect(wellKnownPayload).toContain(
-      `Canonical: ${siteConfig.url}/FFC-IN-Footer_Only_Template/.well-known/security.txt`
+      `Canonical: ${siteConfig.url}/FFC-EX-onlineimpacts.org/.well-known/security.txt`
     )
     expect(wellKnownPayload).toContain(
-      `Canonical: ${siteConfig.url}/FFC-IN-Footer_Only_Template/security.txt`
+      `Canonical: ${siteConfig.url}/FFC-EX-onlineimpacts.org/security.txt`
     )
     expect(wellKnownPayload).toContain(
+      `Policy: ${siteConfig.url}/FFC-EX-onlineimpacts.org${siteConfig.vulnerabilityDisclosurePath}`
+    )
+    expect(wellKnownPayload).toContain(
+      `Acknowledgments: ${siteConfig.url}/FFC-EX-onlineimpacts.org/security-acknowledgements`
+    )
+
+    // No public/CNAME exists yet — siteConfig.url is the *shared*
+    // freeforcharity.github.io origin, so a bare-origin (no project path)
+    // line here would misdirect a reporter to FFC's org homepage rather
+    // than this site. Omit them until a real custom domain is configured
+    // (see scripts/check-drift.mjs checkSecurityTxtSync).
+    expect(wellKnownPayload).not.toContain(`Canonical: ${siteConfig.url}/.well-known/security.txt`)
+    expect(wellKnownPayload).not.toContain(`Canonical: ${siteConfig.url}/security.txt`)
+    expect(wellKnownPayload).not.toContain(
       `Policy: ${siteConfig.url}${siteConfig.vulnerabilityDisclosurePath}`
     )
-    expect(wellKnownPayload).toContain(
-      `Policy: ${siteConfig.url}/FFC-IN-Footer_Only_Template${siteConfig.vulnerabilityDisclosurePath}`
-    )
-    expect(wellKnownPayload).toContain(
+    expect(wellKnownPayload).not.toContain(
       `Acknowledgments: ${siteConfig.url}/security-acknowledgements`
-    )
-    expect(wellKnownPayload).toContain(
-      `Acknowledgments: ${siteConfig.url}/FFC-IN-Footer_Only_Template/security-acknowledgements`
     )
 
     const expires = wellKnownPayload.match(/^Expires:\s*(.+)$/m)?.[1]
