@@ -562,14 +562,18 @@ async function checkSecurityTxtSync(siteConfig) {
   // lines that are now correct — requiring both shapes at once (the
   // pre-fix bug here) would force security.txt to advertise a project-path
   // URL the custom-domain deploy never serves.
-  // Mirror deploy.yml's `[ -s "public/CNAME" ]` check exactly: that tests
-  // non-empty file SIZE, not trimmed content. A whitespace-only file (e.g. a
-  // stray "\n") is non-empty, so deploy.yml treats it as configured and
-  // serves the custom domain's root — `.trim() || null` would collapse that
-  // same file to "no CNAME" here and disagree with deploy.yml about which
-  // URL shape is correct.
-  const cnameRaw = await readIfExists(join(PUBLIC_DIR, 'CNAME'))
-  const cname = Boolean(cnameRaw && cnameRaw.length > 0)
+  // Mirror deploy.yml's `[ -s "public/CNAME" ]` check exactly: that is a stat
+  // test for non-empty file SIZE, not trimmed content, and it does not care
+  // whether the file is readable — a directory at that path has a non-zero
+  // stat size too, so deploy.yml would still treat it as configured. A
+  // whitespace-only file (e.g. a stray "\n") is non-empty for the same
+  // reason. readForCspCheck() (not readIfExists()) is used here so an
+  // unreadable/non-file CNAME is reported as its own read error AND still
+  // counts as "configured" below — collapsing it to "no CNAME" would let
+  // this guard silently disagree with deploy.yml about which URL shape is
+  // correct.
+  const cnameRaw = await readForCspCheck(join(PUBLIC_DIR, 'CNAME'))
+  const cname = cnameRaw === UNREADABLE ? true : Boolean(cnameRaw && cnameRaw.length > 0)
   const rootLines = [
     `Canonical: ${origin}/.well-known/security.txt`,
     `Canonical: ${origin}/security.txt`,

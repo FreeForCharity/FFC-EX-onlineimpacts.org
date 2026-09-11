@@ -277,6 +277,30 @@ describe('security drift guard', () => {
     expect(result.output).toContain('GitHub Pages subpath')
   })
 
+  it('treats an unreadable/non-file public/CNAME as configured too, alongside its own read-error report', () => {
+    // deploy.yml's `[ -s "public/CNAME" ]` is a stat test — it does not care
+    // whether the entry is readable, and a directory at that path has a
+    // non-zero stat size, so deploy.yml would still serve the custom
+    // domain's root. readIfExists() would have collapsed any read error
+    // (e.g. EISDIR) to null ("no CNAME"), silently disagreeing with
+    // deploy.yml about which security.txt URL shape is correct. Using
+    // readForCspCheck() instead reports the read error as its own finding
+    // AND still treats the guard's CNAME state as "configured".
+    const dir = makeFixture({ cname: null })
+    fixtures.push(dir)
+    mkdirSync(join(dir, 'public/CNAME'))
+
+    const result = runDrift(dir)
+
+    expect(result.status).not.toBe(0)
+    expect(result.output).toContain('Could not read public/CNAME')
+    expect(result.output).toContain(
+      'Missing: Canonical: https://ffcworkingsite1.org/.well-known/security.txt'
+    )
+    expect(result.output).toContain('misdirects to')
+    expect(result.output).toContain('GitHub Pages subpath')
+  })
+
   it('passes with only root lines once public/CNAME exists', () => {
     const rootOnly = [
       'Contact: mailto:clarkemoyer@freeforcharity.org',
