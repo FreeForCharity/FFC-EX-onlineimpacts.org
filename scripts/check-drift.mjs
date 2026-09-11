@@ -382,11 +382,13 @@ function checkSiteConfigUrl(siteConfig) {
 //   rule on the zone (Cloudflare Transform Rule); fleet posture is measured by
 //   FFC-Cloudflare-Automation#894.
 // Deliberately separate from the shared readIfExists(), which several other
-// checks call and whose falsy-means-absent contract they rely on. Only this
-// check downgrades "absent" to a warning, so only this check needs to tell
+// checks call and whose falsy-means-absent contract they rely on. This check
+// (originally just the CSP one, now also .linkinatorrc.json's) needs to tell
 // "absent" apart from "present but unreadable" — otherwise a permission or I/O
-// error would be reported as a missing file (sending the reader to restore a
-// file that is already there) and, being a mere warning, would let the run pass.
+// error would be reported as a missing file, sending the reader to restore a
+// file that is already there rather than fix the actual read error. For the
+// CSP check that distinction also matters for severity, since it downgrades
+// a genuinely absent file to a warning.
 const UNREADABLE = Symbol('unreadable')
 
 async function readForCspCheck(path) {
@@ -605,7 +607,8 @@ async function checkLinkinatorSkipsOwnOrigin(siteConfig) {
   if (!siteConfig?.url) return
 
   const configPath = join(ROOT, '.linkinatorrc.json')
-  const body = await readIfExists(configPath)
+  const body = await readForCspCheck(configPath)
+  if (body === UNREADABLE) return // readForCspCheck already reported the read error.
   if (!body) {
     errors.push('.linkinatorrc.json is missing. Add a skip list that excludes siteConfig.url.')
     return

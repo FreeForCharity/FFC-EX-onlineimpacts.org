@@ -257,6 +257,22 @@ describe('security drift guard', () => {
     expect(result.output).toContain('.linkinatorrc.json is missing')
   })
 
+  // Same distinction as the _headers tests above: a file that exists but
+  // cannot be read is not the same fact as it being absent, and must not be
+  // misreported as "missing" (which would send the reader to restore a file
+  // they already have instead of fixing the read error).
+  it('errors with "Could not read", not "is missing", when .linkinatorrc.json cannot be read', () => {
+    const dir = makeFixture({ linkinatorRc: null })
+    fixtures.push(dir)
+    mkdirSync(join(dir, '.linkinatorrc.json'))
+
+    const result = runDrift(dir)
+
+    expect(result.status).not.toBe(0)
+    expect(result.output).toContain('Could not read .linkinatorrc.json')
+    expect(result.output).not.toContain('.linkinatorrc.json is missing')
+  })
+
   it('fails when siteConfig.url is not a bare https origin', () => {
     const dir = makeFixture({
       siteConfig:
