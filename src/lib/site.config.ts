@@ -138,12 +138,14 @@ export const siteConfig: SiteConfig = {
     'Online Impacts was a nonprofit that built websites and offered free tech help to other nonprofits. It has merged its services into Free For Charity — nonprofits it previously hosted or developed for should migrate there.',
   shortDescription:
     'Online Impacts has merged with Free For Charity. Nonprofits it hosted or developed for should migrate there.',
-  // No custom domain is configured yet (this migration phase serves the
-  // default GitHub Pages URL — see public/CNAME, intentionally absent).
-  // Bare origin ONLY — see the nu4children.org precedent comment this was
-  // copied from: the GitHub Pages subpath is supplied separately by
-  // NEXT_PUBLIC_BASE_PATH via sitePath()/assetPath().
-  url: 'https://freeforcharity.github.io',
+  // Custom-domain cutover staged: public/CNAME now carries
+  // onlineimpacts.org, so this must move with it (same drift check
+  // enforces both together — see the nu4children.org precedent this was
+  // copied from). Bare origin ONLY: the GitHub Pages subpath is supplied
+  // separately by NEXT_PUBLIC_BASE_PATH via sitePath()/assetPath(). This
+  // PR is held open (not merged), so this value ships live only once a
+  // human merges the staged cutover.
+  url: 'https://onlineimpacts.org',
   twitterHandle: '',
   // Online Impacts is defunct; direct any inquiry to FFC, which now owns
   // its former relationships (same address the merge notice itself links to).
