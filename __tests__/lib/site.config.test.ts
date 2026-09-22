@@ -22,7 +22,7 @@ describe('siteConfig contract', () => {
     expect(siteConfig).toMatchObject({
       name: 'Online Impacts',
       tagline: 'Merged with Free For Charity',
-      url: 'https://freeforcharity.github.io',
+      url: 'https://onlineimpacts.org',
       twitterHandle: '',
       contactEmail: 'clarkemoyer@freeforcharity.org',
       themeColor: '#ffffff',
@@ -62,10 +62,10 @@ describe('siteConfig contract', () => {
     // canonicalPath() owns the trailingSlash policy; siteUrl() applies both.
     expect(canonicalPath('/')).toBe('/')
     expect(canonicalPath('/privacy-policy')).toBe('/privacy-policy/')
-    expect(siteUrl('/')).toBe('https://freeforcharity.github.io/')
-    expect(siteUrl('/privacy-policy')).toBe('https://freeforcharity.github.io/privacy-policy/')
+    expect(siteUrl('/')).toBe('https://onlineimpacts.org/')
+    expect(siteUrl('/privacy-policy')).toBe('https://onlineimpacts.org/privacy-policy/')
     // Files are served verbatim and must not gain a slash.
-    expect(siteUrl('/sitemap.xml')).toBe('https://freeforcharity.github.io/sitemap.xml')
+    expect(siteUrl('/sitemap.xml')).toBe('https://onlineimpacts.org/sitemap.xml')
     expect(() => siteUrl('privacy-policy')).toThrow(TypeError)
     expect(() => siteUrl('//example.com')).toThrow(TypeError)
     expect(() => canonicalPath('//example.com')).toThrow(TypeError)
@@ -76,12 +76,12 @@ describe('siteConfig contract', () => {
 
     expect(sitePath('/')).toBe('/FFC-EX-onlineimpacts.org/')
     expect(sitePath('/privacy-policy')).toBe('/FFC-EX-onlineimpacts.org/privacy-policy')
-    expect(siteUrl('/')).toBe('https://freeforcharity.github.io/FFC-EX-onlineimpacts.org/')
+    expect(siteUrl('/')).toBe('https://onlineimpacts.org/FFC-EX-onlineimpacts.org/')
     expect(siteUrl('/privacy-policy')).toBe(
-      'https://freeforcharity.github.io/FFC-EX-onlineimpacts.org/privacy-policy/'
+      'https://onlineimpacts.org/FFC-EX-onlineimpacts.org/privacy-policy/'
     )
     expect(siteUrl('/sitemap.xml')).toBe(
-      'https://freeforcharity.github.io/FFC-EX-onlineimpacts.org/sitemap.xml'
+      'https://onlineimpacts.org/FFC-EX-onlineimpacts.org/sitemap.xml'
     )
   })
 
