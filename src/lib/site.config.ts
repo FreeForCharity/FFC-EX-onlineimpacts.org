@@ -42,6 +42,32 @@ export type SiteAddress = {
   mapUrl: string
 }
 
+/**
+ * A footer-standard field the charity has not supplied yet. Listing a field in
+ * `siteConfig.pending` renders a visible "awaiting information" placeholder in
+ * its place (plain text, never a link), so a gap in the FFC footer standard is
+ * a call to action on the page rather than a silent omission. The field's own
+ * value must stay empty while it is pending, so no placeholder or borrowed
+ * value (e.g. the template's Free For Charity details) can ship behind it.
+ *
+ * An empty value that is NOT listed here keeps its plain meaning: the charity
+ * has none (e.g. no public phone). `taxStatusLabel` is deliberately not a
+ * pending field: it is a legal claim, and '' means "make no claim".
+ */
+export type PendingField =
+  | 'email'
+  | 'phone'
+  | 'address'
+  | 'ein'
+  | 'guidestar'
+  | 'social'
+  | 'team'
+  | 'donationUrl'
+  | 'volunteerUrl'
+
+/** Visible text shown in place of a pending field. */
+export const PENDING_TEXT = 'Awaiting information from the charity'
+
 export type SiteConfig = {
   /** Display name of the charity (used in titles, OG/Twitter cards). */
   name: string
@@ -91,7 +117,13 @@ export type SiteConfig = {
   phone: { display: string; tel: string }
   /** Physical office addresses shown in the footer contact column. */
   addresses: readonly SiteAddress[]
-  /** GuideStar / Candid transparency profile links shown in the footer. */
+  /**
+   * GuideStar / Candid transparency profile links shown in the footer. Each is
+   * a transparency claim, so the seal renders only when `profileUrl` is set and
+   * the direct-link button only when `directProfileUrl` is set. Leave both ''
+   * until the charity has its own Candid profile (never copy another
+   * organization's), and list 'guidestar' in `pending` if one is coming.
+   */
   guidestar: { profileUrl: string; directProfileUrl: string }
   /**
    * Permanent attribution to the supporting organization (FFC). Drives the
@@ -108,73 +140,57 @@ export type SiteConfig = {
    * nonprofit. Omit for a standalone charity (the footer clause is hidden).
    */
   parentOrg?: { name: string; url: string; hubUrl: string }
+  /**
+   * Footer-standard fields still awaiting the charity. See `PendingField`.
+   * Omit (or leave empty) once every field is supplied. This template's own
+   * config sets none: Free For Charity has all of its details.
+   */
+  pending?: readonly PendingField[]
 }
 
-/**
- * Sentinel for a SiteConfig string field with no validated value yet.
- *
- * The shared cross-template schema (schema/site-config.schema.json)
- * requires `ein`, `phone.display`, `phone.tel`, `guidestar.profileUrl` and
- * `guidestar.directProfileUrl` to be non-empty strings — so `''` (the
- * pattern used for an optional `social[].href`) is not available here.
- * This sentinel satisfies that constraint without asserting a fact we have
- * not validated. Consumers (Footer) must compare against this constant
- * rather than truthiness before rendering the value or a link built from
- * it — see hasValidatedNonprofitStatus and the phone guard below.
- */
-export const NOT_YET_AVAILABLE = 'Not yet available'
-
 export const siteConfig: SiteConfig = {
-  // Online Impacts closed and merged its services into Free For Charity
-  // (see the live "Coming Soon" notice at onlineimpacts.org, captured
-  // verbatim as this site's only page). It is not an active, operating
-  // nonprofit any more, so EIN/phone/address/GuideStar below are left as
-  // NOT_YET_AVAILABLE (Level 1 footer) rather than asserting ongoing
-  // 501(c)(3) status for a defunct entity — see FFC-Cloudflare-Automation
-  // #702, tracking issue #14 in this repo.
+  // Online Impacts closed and merged its services into Free For Charity, so
+  // this site is a merge notice that sends visitors to FFC's real pathways
+  // (freeforcharity.org, the FFC hub). The contact details below are
+  // deliberately Free For Charity's own, as published on freeforcharity.org:
+  // FFC now answers for Online Impacts' former relationships. Nothing is
+  // pending: an empty EIN / GuideStar / address here means "none", because
+  // the defunct organization makes no ongoing 501(c)(3) or transparency claim
+  // (the footer hides the Endorsements column and the status clause).
   name: 'Online Impacts',
-  tagline: 'Merged with Free For Charity',
+  tagline: 'Now part of Free For Charity',
   description:
-    'Online Impacts was a nonprofit that built websites and offered free tech help to other nonprofits. It has merged its services into Free For Charity — nonprofits it previously hosted or developed for should migrate there.',
+    'Online Impacts, a nonprofit that built websites and offered free tech help to other nonprofits, is now part of Free For Charity. Nonprofits it hosted or developed for can migrate to Free For Charity.',
   shortDescription:
-    'Online Impacts has merged with Free For Charity. Nonprofits it hosted or developed for should migrate there.',
+    'Online Impacts is now part of Free For Charity. Nonprofits it hosted or developed for can migrate to Free For Charity.',
   // No custom domain is configured yet (this migration phase serves the
   // default GitHub Pages URL — see public/CNAME, intentionally absent).
-  // Bare origin ONLY — see the nu4children.org precedent comment this was
-  // copied from: the GitHub Pages subpath is supplied separately by
+  // Bare origin ONLY: the GitHub Pages subpath is supplied separately by
   // NEXT_PUBLIC_BASE_PATH via sitePath()/assetPath().
   url: 'https://freeforcharity.github.io',
   twitterHandle: '',
-  // Online Impacts is defunct; direct any inquiry to FFC, which now owns
-  // its former relationships (same address the merge notice itself links to).
+  // Free For Charity's public contact (freeforcharity.org), which now owns
+  // Online Impacts' former relationships.
   contactEmail: 'clarkemoyer@freeforcharity.org',
-  keywords: ['nonprofit', 'charity', 'free hosting', 'free web development', 'merged'],
+  keywords: ['nonprofit', 'charity', 'Online Impacts', 'Free For Charity', 'merged'],
   themeColor: '#ffffff',
   vulnerabilityDisclosurePath: '/vulnerability-disclosure-policy',
   social: [],
-  // No EIN could be validated for this now-defunct organization — do not
-  // fill this in without a validated source. See NOT_YET_AVAILABLE above.
-  // Written as the literal string, NOT the NOT_YET_AVAILABLE identifier:
-  // scripts/check-site-config.mjs statically extracts this object literal
-  // and evaluates it without resolving imports/identifiers ("must be plain
-  // data"), so referencing the constant here breaks that check. Keep these
-  // strings identical to NOT_YET_AVAILABLE above — a mismatch only breaks
-  // the Level 1/2 gate silently.
-  ein: 'Not yet available',
-  phone: { display: 'Not yet available', tel: 'Not yet available' },
+  ein: '',
+  // Free For Charity's public phone (freeforcharity.org).
+  phone: { display: '(520) 222-8104', tel: '5202228104' },
   addresses: [],
   guidestar: {
-    profileUrl: 'Not yet available',
-    directProfileUrl: 'Not yet available',
+    profileUrl: '',
+    directProfileUrl: '',
   },
   supportedBy: {
     name: 'Free For Charity',
     url: 'https://freeforcharity.org',
     hubUrl: 'https://freeforcharity.org/hub/',
   },
-  // parentOrg is intentionally unset: this template is for standalone
-  // charities by default. Set it only for a genuine "a project of"
-  // fiscal-sponsorship relationship.
+  // parentOrg is intentionally unset: Online Impacts is not "a project of"
+  // FFC; it merged into it (said on the page itself).
 }
 
 function configuredBasePath(): string {
@@ -284,4 +300,9 @@ export function twitterSite(): string | undefined {
 
 export function cardDescription(): string {
   return siteConfig.shortDescription.trim() || siteConfig.description
+}
+
+/** True when `field` is listed in `siteConfig.pending`. */
+export function isPending(field: PendingField): boolean {
+  return siteConfig.pending?.includes(field) ?? false
 }

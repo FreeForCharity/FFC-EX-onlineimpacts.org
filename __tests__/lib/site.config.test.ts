@@ -1,11 +1,15 @@
 import {
+  PENDING_TEXT,
   canonicalPath,
   cardDescription,
+  isPending,
+  type PendingField,
   siteConfig,
   sitePath,
   siteUrl,
   twitterSite,
 } from '../../src/lib/site.config'
+import { team } from '../../src/data/team'
 
 const originalBasePath = process.env.NEXT_PUBLIC_BASE_PATH
 
@@ -21,7 +25,7 @@ describe('siteConfig contract', () => {
   it('exposes the full site identity shape used by runtime consumers', () => {
     expect(siteConfig).toMatchObject({
       name: 'Online Impacts',
-      tagline: 'Merged with Free For Charity',
+      tagline: 'Now part of Free For Charity',
       url: 'https://freeforcharity.github.io',
       twitterHandle: '',
       contactEmail: 'clarkemoyer@freeforcharity.org',
@@ -31,18 +35,17 @@ describe('siteConfig contract', () => {
     expect(siteConfig.description).toContain('nonprofits')
     expect(siteConfig.shortDescription).toContain('Free For Charity')
     expect(siteConfig.keywords).toEqual(expect.arrayContaining(['nonprofit', 'charity', 'merged']))
-    // No validated social links exist for this now-defunct organization.
+    // No social links exist for this now-defunct organization.
     expect(siteConfig.social).toEqual([])
-    // No EIN/Candid profile is validated (Level 1 footer) — see
-    // NOT_YET_AVAILABLE in site.config.ts.
-    expect(siteConfig.guidestar.profileUrl).toBe('Not yet available')
-    expect(siteConfig.guidestar.directProfileUrl).toBe('Not yet available')
-    expect(siteConfig.ein).toBe('Not yet available')
-    expect(siteConfig.phone).toEqual({
-      display: 'Not yet available',
-      tel: 'Not yet available',
-    })
+    // The defunct organization makes no ongoing EIN / Candid claim: empty and
+    // NOT pending means "none" (Level 1 footer, no Endorsements column).
+    expect(siteConfig.guidestar).toEqual({ profileUrl: '', directProfileUrl: '' })
+    expect(siteConfig.ein).toBe('')
+    // Online Impacts is now part of Free For Charity: the contact details are
+    // FFC's own, as published on freeforcharity.org.
+    expect(siteConfig.phone).toEqual({ display: '(520) 222-8104', tel: '5202228104' })
     expect(siteConfig.addresses).toEqual([])
+    expect(siteConfig.pending ?? []).toEqual([])
     // Permanent "Supported by" footer attribution (FFC footer standard) — the
     // values are intentionally FFC's and must survive template customization.
     expect(siteConfig.supportedBy).toEqual({
@@ -88,5 +91,92 @@ describe('siteConfig contract', () => {
   it('normalizes card metadata helpers', () => {
     expect(twitterSite()).toBeUndefined()
     expect(cardDescription()).toBe(siteConfig.shortDescription)
+  })
+})
+
+describe('siteConfig.pending contract', () => {
+  // Every PendingField, mapped to "its value is empty". A pending field must
+  // carry no value, so no placeholder or borrowed (template/FFC) value can
+  // ship behind the "awaiting information" notice. The Record type makes this
+  // map fail to compile if PendingField grows a member it does not cover.
+  // This site's config has no donationUrl / volunteerUrl keys, so those are
+  // always empty here.
+  const isEmpty: Record<PendingField, () => boolean> = {
+    email: () => siteConfig.contactEmail.trim() === '',
+    phone: () => siteConfig.phone.display.trim() === '' && siteConfig.phone.tel.trim() === '',
+    address: () => siteConfig.addresses.length === 0,
+    ein: () => siteConfig.ein.trim() === '',
+    guidestar: () =>
+      siteConfig.guidestar.profileUrl.trim() === '' &&
+      siteConfig.guidestar.directProfileUrl.trim() === '',
+    social: () => siteConfig.social.every((s) => s.href.trim() === ''),
+    team: () => team.length === 0,
+    donationUrl: () => true,
+    volunteerUrl: () => true,
+  }
+  const knownFields = Object.keys(isEmpty)
+
+  /** Pending fields that are unknown, duplicated, or still carry a value. */
+  function pendingViolations(): string[] {
+    const pending = siteConfig.pending ?? []
+    const problems: string[] = []
+    pending.forEach((field, index) => {
+      if (!knownFields.includes(field)) problems.push(`${field}: unknown field`)
+      else if (pending.indexOf(field) !== index) problems.push(`${field}: listed twice`)
+      else if (!isEmpty[field]()) problems.push(`${field}: pending but has a value`)
+    })
+    return problems
+  }
+
+  it('holds for the shipped config', () => {
+    expect(pendingViolations()).toEqual([])
+    for (const field of siteConfig.pending ?? []) expect(isPending(field)).toBe(true)
+  })
+
+  it('has a fixed, non-empty placeholder text', () => {
+    expect(PENDING_TEXT).toBe('Awaiting information from the charity')
+  })
+
+  describe('with a fork-style pending list', () => {
+    const original = {
+      contactEmail: siteConfig.contactEmail,
+      phone: siteConfig.phone,
+      ein: siteConfig.ein,
+      pending: siteConfig.pending,
+    }
+    afterEach(() => {
+      Object.assign(siteConfig, original)
+    })
+
+    it('isPending reflects exactly the listed fields', () => {
+      siteConfig.pending = undefined
+      for (const field of knownFields) expect(isPending(field as PendingField)).toBe(false)
+
+      siteConfig.pending = ['phone', 'guidestar']
+      expect(isPending('phone')).toBe(true)
+      expect(isPending('guidestar')).toBe(true)
+      expect(isPending('email')).toBe(false)
+    })
+
+    it('rejects a pending field that still carries a value', () => {
+      // This site's email and phone are set, so listing them is a violation.
+      siteConfig.pending = ['email', 'phone']
+      expect(pendingViolations()).toEqual([
+        'email: pending but has a value',
+        'phone: pending but has a value',
+      ])
+    })
+
+    it('accepts pending fields whose values are empty', () => {
+      siteConfig.contactEmail = ''
+      siteConfig.phone = { display: '', tel: '' }
+      siteConfig.pending = ['email', 'phone', 'ein', 'guidestar', 'address', 'social', 'team']
+      expect(pendingViolations()).toEqual([])
+    })
+
+    it('rejects an unknown or duplicated field', () => {
+      siteConfig.pending = ['ein', 'ein', 'taxStatusLabel' as PendingField]
+      expect(pendingViolations()).toEqual(['ein: listed twice', 'taxStatusLabel: unknown field'])
+    })
   })
 })

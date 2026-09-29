@@ -6,6 +6,7 @@ import { FiMenu } from 'react-icons/fi'
 import { LiaSearchSolid } from 'react-icons/lia'
 import { RxCross2 } from 'react-icons/rx'
 import { motion, AnimatePresence } from 'framer-motion'
+import { siteConfig } from '@/lib/site.config'
 
 interface MenuItem {
   label: string
@@ -92,11 +93,13 @@ const Header: React.FC = () => {
               className={`transition-all duration-300 ${isScrolled ? 'w-[110px]' : 'w-[150px]'}`}
             >
               <Link href="/" onClick={handleLinkClick} className="block">
-                <img
-                  src="https://freeforcharity.org/wp-content/uploads/2024/04/Screenshot_145.png"
-                  alt="Free For Charity"
-                  className={`transition-all duration-300 ${isScrolled ? 'h-7' : 'h-11'}`}
-                />
+                {/* No charity logo yet: show the name as text rather than
+                  another organization's logo. */}
+                <span
+                  className={`block font-semibold leading-tight transition-all duration-300 ${isScrolled ? 'text-xs' : 'text-sm'}`}
+                >
+                  {siteConfig.name}
+                </span>
               </Link>
             </div>
 
