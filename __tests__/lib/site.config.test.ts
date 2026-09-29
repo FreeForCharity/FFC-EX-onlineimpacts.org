@@ -175,8 +175,8 @@ describe('siteConfig.pending contract', () => {
     })
 
     it('rejects an unknown or duplicated field', () => {
-      siteConfig.pending = ['ein', 'ein', 'taxStatusLabel' as PendingField]
-      expect(pendingViolations()).toEqual(['ein: listed twice', 'taxStatusLabel: unknown field'])
+      siteConfig.pending = ['ein', 'ein', 'notAField' as PendingField]
+      expect(pendingViolations()).toEqual(['ein: listed twice', 'notAField: unknown field'])
     })
   })
 })

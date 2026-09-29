@@ -51,8 +51,10 @@ export type SiteAddress = {
  * value (e.g. the template's Free For Charity details) can ship behind it.
  *
  * An empty value that is NOT listed here keeps its plain meaning: the charity
- * has none (e.g. no public phone). `taxStatusLabel` is deliberately not a
- * pending field: it is a legal claim, and '' means "make no claim".
+ * has none (e.g. no public phone). The footer's "US 501(c)(3)" status clause
+ * is not a pending field: it is a legal claim, derived in the footer from a
+ * configured EIN plus a GuideStar profile (never from a pending placeholder),
+ * so leaving either empty makes no claim.
  */
 export type PendingField =
   | 'email'
