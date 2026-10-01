@@ -9,7 +9,14 @@ import { FaXTwitter } from 'react-icons/fa6'
 import type { IconType } from 'react-icons'
 import type { LucideIcon } from 'lucide-react'
 import { assetPath } from '@/lib/assetPath'
-import { siteConfig, NOT_YET_AVAILABLE } from '@/lib/site.config'
+import { PENDING_TEXT, isPending, siteConfig } from '@/lib/site.config'
+
+// Visible stand-in for a footer-standard field the charity has not supplied
+// yet (see PendingField in site.config.ts). Plain text, never a link: a gap
+// in the standard should read as a call to action, not as a working control.
+function PendingNote() {
+  return <span className="block italic text-[15px] text-gray-300">{PENDING_TEXT}</span>
+}
 
 // Maps a social link's label (as defined in siteConfig.social) to an icon.
 // Unknown labels fall back to a generic link icon (Link2) so a charity
@@ -28,64 +35,78 @@ const socialIconByLabel: Record<string, IconType | LucideIcon> = {
 const Footer: React.FC = () => {
   const currentYear = React.useMemo(() => new Date().getFullYear(), [])
   const socialLinks = siteConfig.social.filter((social) => social.href)
-  // FFC footer standard, Level 1 vs Level 2: a validated EIN/Candid profile
-  // unlocks the Endorsements column (GuideStar seal + EIN line). Until this
-  // organization's 501(c)(3) status and EIN are validated, siteConfig.ein and
-  // siteConfig.guidestar hold the NOT_YET_AVAILABLE sentinel (the shared
-  // cross-template schema requires non-empty strings, so '' is not
-  // available as an "unset" signal here) and this column — and any status
-  // claim — must not render. Compare against the sentinel, not truthiness:
-  // a non-empty placeholder string is still truthy. Never hardcode this
-  // content; it must come from siteConfig so an unvalidated fork can never
-  // accidentally claim it.
-  const hasValidatedNonprofitStatus =
-    siteConfig.ein !== NOT_YET_AVAILABLE && siteConfig.guidestar.profileUrl !== NOT_YET_AVAILABLE
+  // FFC footer standard, Level 1 vs Level 2: a validated EIN and Candid
+  // profile unlock the Endorsements column (GuideStar seal + EIN line) and the
+  // 501(c)(3) status clause. An empty value means "none" (and the column is
+  // hidden) unless it is listed in siteConfig.pending, in which case the
+  // column renders an "awaiting information" placeholder in its slot instead.
+  // Never hardcode this content; it must come from siteConfig so an
+  // unvalidated fork can never accidentally claim it.
+  const hasSeal = Boolean(siteConfig.guidestar.profileUrl.trim())
+  const hasDirectLink = Boolean(siteConfig.guidestar.directProfileUrl.trim())
+  const hasEin = Boolean(siteConfig.ein.trim())
+  const hasValidatedNonprofitStatus = hasEin && hasSeal
+  const showEndorsements =
+    hasSeal || hasDirectLink || hasEin || isPending('guidestar') || isPending('ein')
 
   return (
     <footer className="bg-black text-white">
       <div
-        className={`max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 ${hasValidatedNonprofitStatus ? 'lg:grid-cols-3' : 'lg:grid-cols-2'} gap-5 py-12 px-4 md:px-6 lg:px-8`}
+        className={`max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 ${showEndorsements ? 'lg:grid-cols-3' : 'lg:grid-cols-2'} gap-5 py-12 px-4 md:px-6 lg:px-8`}
       >
-        {/* Column 1: Endorsements — Level 2 only (validated EIN + Candid/GuideStar profile) */}
-        {hasValidatedNonprofitStatus && (
+        {/* Column 1: Endorsements — a configured EIN / Candid profile, or its placeholder while pending */}
+        {showEndorsements && (
           <div className="space-y-6 px-4 sm:px-0">
             <h3 className="text-[28px] text-white">Endorsements</h3>
 
             <div className="space-y-4">
-              <a
-                href={siteConfig.guidestar.profileUrl}
-                aria-label={`View ${siteConfig.name} GuideStar Profile`}
-              >
-                <img
-                  src={assetPath('/Svgs/footerImage.svg')}
-                  alt="GuideStar Platinum Seal of Transparency"
-                />
-              </a>
-              {siteConfig.guidestar.directProfileUrl !== NOT_YET_AVAILABLE &&
-                siteConfig.guidestar.directProfileUrl && (
-                  <Link
-                    href={siteConfig.guidestar.directProfileUrl}
-                    className="group relative my-4 flex w-full max-w-[230px] items-center justify-between
+              {/* The seal and the direct link are transparency claims: each renders
+                only when its own GuideStar URL is configured, so a charity with no
+                profile shows neither rather than linking to someone else's. */}
+              {hasSeal && (
+                <a
+                  href={siteConfig.guidestar.profileUrl}
+                  aria-label={`View ${siteConfig.name} GuideStar Profile`}
+                >
+                  <img
+                    src={assetPath('/Svgs/footerImage.svg')}
+                    alt="GuideStar Platinum Seal of Transparency"
+                  />
+                </a>
+              )}
+              {isPending('guidestar') && (
+                <div>
+                  <p className="font-[500] text-[22px]">GuideStar / Candid Profile</p>
+                  <PendingNote />
+                </div>
+              )}
+              {hasDirectLink && (
+                <Link
+                  href={siteConfig.guidestar.directProfileUrl}
+                  className="group relative my-4 flex w-full max-w-[230px] items-center justify-between
                 border-2 border-[#2ea3f2] bg-black px-5 py-2.5 text-[#2ea3f2]
                 transition-all duration-300 hover:border-transparent"
-                    id="aria-font"
-                  >
-                    <span className="text-[17px] font-medium leading-tight sm:text-[18px] md:text-[20px] transition-transform duration-300 group-hover:-translate-x-1">
-                      Direct GuideStar Profile Link
-                    </span>
+                  id="aria-font"
+                >
+                  <span className="text-[17px] font-medium leading-tight sm:text-[18px] md:text-[20px] transition-transform duration-300 group-hover:-translate-x-1">
+                    Direct GuideStar Profile Link
+                  </span>
 
-                    <ArrowRight
-                      className="h-8 w-8 translate-x-2 opacity-0 text-[#2ea3f2] transition-all duration-300 group-hover:translate-x-0 group-hover:opacity-100"
-                      strokeWidth={2}
-                    />
-                  </Link>
-                )}
+                  <ArrowRight
+                    className="h-8 w-8 translate-x-2 opacity-0 text-[#2ea3f2] transition-all duration-300 group-hover:translate-x-0 group-hover:opacity-100"
+                    strokeWidth={2}
+                  />
+                </Link>
+              )}
 
-              <p>
-                <span className="font-[500] text-[22px]">
-                  {siteConfig.name} EIN: {siteConfig.ein}
-                </span>
-              </p>
+              {(hasEin || isPending('ein')) && (
+                <p>
+                  <span className="font-[500] text-[22px]">
+                    {siteConfig.name} EIN: {isPending('ein') ? null : siteConfig.ein}
+                  </span>
+                  {isPending('ein') && <PendingNote />}
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -195,34 +216,55 @@ const Footer: React.FC = () => {
               <Mail className="w-10 h-10 text-orange-500 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="font-[500] text-[22px]">E-mail</p>
-                <a
-                  href={`mailto:${siteConfig.contactEmail}`}
-                  className="font-[500] text-[15px] hover:text-cyan-400 transition-colors break-all"
-                  id="aria-font"
-                >
-                  {siteConfig.contactEmail}
-                </a>
+                {isPending('email') ? (
+                  <PendingNote />
+                ) : (
+                  <a
+                    href={`mailto:${siteConfig.contactEmail}`}
+                    className="font-[500] text-[15px] hover:text-cyan-400 transition-colors break-all"
+                    id="aria-font"
+                  >
+                    {siteConfig.contactEmail}
+                  </a>
+                )}
               </div>
             </div>
 
-            {siteConfig.phone.display !== NOT_YET_AVAILABLE &&
-              siteConfig.phone.tel !== NOT_YET_AVAILABLE &&
-              siteConfig.phone.display &&
-              siteConfig.phone.tel && (
-                <div className="flex items-start gap-3">
-                  <Phone className="w-10 h-10 text-orange-500 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-[500] text-[22px]">Call Us Today</p>
-                    <a
-                      href={`tel:${siteConfig.phone.tel}`}
-                      className="font-[500] text-[16px] hover:text-cyan-400 transition-colors"
-                      id="aria-font"
-                    >
-                      {siteConfig.phone.display}
-                    </a>
-                  </div>
+            {isPending('phone') && (
+              <div className="flex items-start gap-3">
+                <Phone className="w-10 h-10 text-orange-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-[500] text-[22px]">Call Us Today</p>
+                  <PendingNote />
                 </div>
-              )}
+              </div>
+            )}
+
+            {siteConfig.phone.display.trim() && siteConfig.phone.tel.trim() && (
+              <div className="flex items-start gap-3">
+                <Phone className="w-10 h-10 text-orange-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-[500] text-[22px]">Call Us Today</p>
+                  <a
+                    href={`tel:${siteConfig.phone.tel}`}
+                    className="font-[500] text-[16px] hover:text-cyan-400 transition-colors"
+                    id="aria-font"
+                  >
+                    {siteConfig.phone.display}
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {isPending('address') && (
+              <div className="flex items-start gap-3">
+                <MapPin className="w-10 h-10 text-orange-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-[500] text-[22px]">Address</p>
+                  <PendingNote />
+                </div>
+              </div>
+            )}
 
             {siteConfig.addresses.map((address) => (
               <a
@@ -251,6 +293,12 @@ const Footer: React.FC = () => {
               </a>
             ))}
 
+            {isPending('social') && (
+              <div className="pt-4">
+                <p className="font-[500] text-[22px]">Social Media</p>
+                <PendingNote />
+              </div>
+            )}
             <div className="flex gap-3 pt-4">
               {socialLinks.map(({ href, label }) => {
                 const Icon = socialIconByLabel[label] ?? Link2

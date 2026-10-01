@@ -2,6 +2,7 @@ import React from 'react'
 import { render, screen } from '@testing-library/react'
 import { axe, toHaveNoViolations } from 'jest-axe'
 import Footer from '../../src/components/footer'
+import { PENDING_TEXT, type PendingField, siteConfig } from '../../src/lib/site.config'
 
 // Extend Jest matchers
 expect.extend(toHaveNoViolations)
@@ -47,9 +48,19 @@ describe('Footer component', () => {
     expect(emailLink).toHaveAttribute('href', 'mailto:clarkemoyer@freeforcharity.org')
   })
 
-  it('should NOT render a phone contact block (no phone for this defunct organization)', () => {
+  it("should show Free For Charity's phone (Online Impacts is now part of FFC)", () => {
     render(<Footer />)
-    expect(screen.queryByText('Call Us Today')).not.toBeInTheDocument()
+    expect(screen.getByText('Call Us Today')).toBeInTheDocument()
+    expect(screen.getByText('(520) 222-8104').closest('a')).toHaveAttribute(
+      'href',
+      'tel:5202228104'
+    )
+  })
+
+  it('should list nothing as pending (the merged organization has no gaps to fill)', () => {
+    render(<Footer />)
+    expect(siteConfig.pending ?? []).toEqual([])
+    expect(screen.queryByText(PENDING_TEXT)).not.toBeInTheDocument()
   })
 
   it('should NOT render an address block (no address for this defunct organization)', () => {
@@ -125,5 +136,137 @@ describe('Footer component', () => {
     const { container } = render(<Footer />)
     const results = await axe(container)
     expect(results).toHaveNoViolations()
+  })
+})
+
+// The `pending` convention (see PendingField in src/lib/site.config.ts): a
+// footer-standard field the charity has not supplied yet keeps an EMPTY value
+// and renders PENDING_TEXT in its slot as plain text, never a link. The
+// template itself lists nothing pending, so these cases set the config
+// themselves and restore it afterwards, covering both states on every site.
+describe('pending footer fields', () => {
+  const original = {
+    contactEmail: siteConfig.contactEmail,
+    phone: siteConfig.phone,
+    addresses: siteConfig.addresses,
+    ein: siteConfig.ein,
+    guidestar: siteConfig.guidestar,
+    social: siteConfig.social,
+    pending: siteConfig.pending,
+  }
+  afterEach(() => {
+    Object.assign(siteConfig, original)
+  })
+
+  // Every footer slot. 'team' is not a footer field: it belongs to the team
+  // section (see TheFreeForCharityTeam.test.tsx).
+  // This footer has no Donate / Volunteer links (the organization is defunct),
+  // so 'donationUrl' / 'volunteerUrl' have no slot here.
+  const footerFields: readonly PendingField[] = [
+    'guidestar',
+    'ein',
+    'email',
+    'phone',
+    'address',
+    'social',
+  ]
+
+  function makeEveryFooterFieldPending() {
+    siteConfig.contactEmail = ''
+    siteConfig.phone = { display: '', tel: '' }
+    siteConfig.addresses = []
+    siteConfig.ein = ''
+    siteConfig.guidestar = { profileUrl: '', directProfileUrl: '' }
+    siteConfig.social = siteConfig.social.map((link) => ({ ...link, href: '' }))
+    siteConfig.pending = [...footerFields]
+  }
+
+  it('renders one non-link placeholder per pending footer field in the shipped config', () => {
+    render(<Footer />)
+    const pendingInFooter = (siteConfig.pending ?? []).filter((f) => f !== 'team')
+    const notes = screen.queryAllByText(PENDING_TEXT)
+    expect(notes).toHaveLength(pendingInFooter.length)
+    for (const note of notes) expect(note.closest('a')).toBeNull()
+  })
+
+  it('renders a visible, non-link placeholder for each pending footer field', () => {
+    makeEveryFooterFieldPending()
+    render(<Footer />)
+
+    const notes = screen.getAllByText(PENDING_TEXT)
+    expect(notes).toHaveLength(footerFields.length)
+    for (const note of notes) expect(note.closest('a')).toBeNull()
+
+    // Each placeholder sits under its own slot heading.
+    for (const heading of [
+      'GuideStar / Candid Profile',
+      'E-mail',
+      'Call Us Today',
+      'Address',
+      'Social Media',
+    ]) {
+      expect(screen.getByText(heading)).toBeInTheDocument()
+    }
+    expect(screen.getByText(`${siteConfig.name} EIN:`, { exact: false })).toBeInTheDocument()
+
+    // Nothing that looks actionable survives behind a placeholder.
+    expect(screen.queryByAltText('GuideStar Platinum Seal of Transparency')).toBeNull()
+    expect(screen.queryByText('Direct GuideStar Profile Link')).toBeNull()
+    expect(document.querySelector('a[href^="tel:"]')).toBeNull()
+    expect(document.querySelector('a[href*="google.com/maps"]')).toBeNull()
+    expect(document.querySelector('a[href="mailto:"]')).toBeNull()
+  })
+
+  it('treats an empty field that is NOT pending as "the charity has none"', () => {
+    siteConfig.phone = { display: '', tel: '' }
+    siteConfig.addresses = []
+    siteConfig.guidestar = { profileUrl: '', directProfileUrl: '' }
+    siteConfig.pending = []
+    render(<Footer />)
+
+    expect(screen.queryByText(PENDING_TEXT)).toBeNull()
+    expect(screen.queryByText('Call Us Today')).toBeNull()
+    expect(screen.queryByText('GuideStar / Candid Profile')).toBeNull()
+  })
+
+  it('has no accessibility violations with every footer field pending', async () => {
+    makeEveryFooterFieldPending()
+    const { container } = render(<Footer />)
+    expect(await axe(container)).toHaveNoViolations()
+  })
+
+  // The seal and the direct-link button are separate transparency claims, so
+  // each is gated on its own URL, and neither renders when both are empty.
+  describe('GuideStar elements', () => {
+    const seal = () => screen.queryByAltText('GuideStar Platinum Seal of Transparency')
+    const directLink = () => screen.queryByText('Direct GuideStar Profile Link')
+
+    it.each([
+      ['both URLs', 'https://example.org/seal', 'https://example.org/direct', true, true],
+      ['only the profile URL', 'https://example.org/seal', '', true, false],
+      ['only the direct URL', '', 'https://example.org/direct', false, true],
+      ['neither URL', '', '', false, false],
+      ['whitespace-only URLs', '   ', '   ', false, false],
+    ])('with %s configured', (_case, profileUrl, directProfileUrl, showSeal, showLink) => {
+      siteConfig.guidestar = { profileUrl, directProfileUrl }
+      siteConfig.pending = []
+      render(<Footer />)
+
+      expect(Boolean(seal())).toBe(showSeal)
+      expect(Boolean(directLink())).toBe(showLink)
+      if (showSeal) expect(seal()!.closest('a')).toHaveAttribute('href', profileUrl)
+      if (showLink) expect(directLink()!.closest('a')).toHaveAttribute('href', directProfileUrl)
+    })
+
+    it('shows the placeholder, and no seal or link, while GuideStar is pending', () => {
+      siteConfig.guidestar = { profileUrl: '', directProfileUrl: '' }
+      siteConfig.pending = ['guidestar']
+      render(<Footer />)
+
+      expect(screen.getByText('GuideStar / Candid Profile')).toBeInTheDocument()
+      expect(screen.getByText(PENDING_TEXT).closest('a')).toBeNull()
+      expect(seal()).toBeNull()
+      expect(directLink()).toBeNull()
+    })
   })
 })
